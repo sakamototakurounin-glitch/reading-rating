@@ -9,6 +9,7 @@ const quickApi = await readFile(new URL('../api/generate-quick.js', import.meta.
 const longApi = await readFile(new URL('../api/generate-long.js', import.meta.url), 'utf8');
 const gradeApi = await readFile(new URL('../api/grade-summary.js', import.meta.url), 'utf8');
 const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
+const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
 test('top screen uses compact modes and profile instead of rating hero',()=>{
   assert.match(app,/compact-home/); assert.doesNotMatch(app,/rating-orbit/); assert.match(html,/profile-button/);
@@ -37,6 +38,9 @@ test('Long has WPM50 reading limit, concrete vocabulary, and structured summary 
 test('question timer starts after paint, uses a deadline, and stops on choice',()=>{ assert.match(app,/requestAnimationFrame\(\(\)=>requestAnimationFrame/); assert.match(app,/deadlineTimestamp=startTimestamp\+duration\*1000/); assert.match(app,/deadlineTimestamp-Date\.now\(\)/); assert.match(app,/addEventListener\('change',\(\)=>settle/); assert.match(app,/activeQuestionTimerCancel/); });
 test('question timer is a sticky safe-area toolbar with separate warning thresholds',()=>{ assert.match(app,/mode==='quick'\?10:15/); assert.match(app,/question-toolbar/); assert.match(styles,/\.question-toolbar \{ position:sticky/); assert.match(styles,/env\(safe-area-inset-top\)/); });
 test('recent semantic history is sent for both generators',()=>{ assert.match(app,/recentPassages:recentHistoryForPrompt/); assert.match(quickApi,/centralThesis/); assert.match(quickApi,/mainExamples/); assert.match(longApi,/buildDifficultyProfile/); assert.match(longApi,/isTooSimilar/); });
-test('generators require passage-dependent question audits',()=>{ for(const source of [quickApi,longApi]){assert.match(source,/commonKnowledgeAnswerable/);assert.match(source,/passageSpecificEvidence/);assert.match(source,/specialistKnowledgeRequired/);assert.match(source,/properNounRecall/);assert.match(source,/Could a reasonably educated person answer this correctly without reading the passage/);} });
+test('generators require passage-dependent question audits',()=>{ for(const source of [quickApi,longApi]){assert.match(source,/commonKnowledgeAnswerable/);assert.match(source,/passageSpecificEvidence/);assert.match(source,/specialistKnowledgeRequired/);assert.match(source,/properNounRecall/);assert.match(source,/Could a reasonably educated person answer this correctly without reading the (?:passage|document)/);} });
 test('generators track case structure instead of title-only novelty',()=>{ for(const source of [quickApi,longApi]){assert.match(source,/caseType/);assert.match(source,/fictionalEntityName/);assert.match(source,/keyMechanism/);assert.match(source,/outcome/);assert.match(source,/argumentPattern/);} });
 test('Quick generates its three rich passages in parallel',()=>{ assert.match(quickApi,/Promise\.all\(\[0,1,2\]\.map/); assert.match(quickApi,/categoryGroups/); });
+test('version 1.0 is visible and package version is aligned',()=>{ assert.match(html,/ver 1\.0/); assert.equal(packageJson.version,'1.0.0'); });
+test('reading columns use wider compact layouts',()=>{ assert.match(styles,/\.quick-reading \{[^}]*max-width:1180px/); assert.match(styles,/\.long-copy \{[^}]*max-width:1040px/); assert.match(styles,/\.focus-question,.summary-page \{[^}]*max-width:1080px/); });
+test('Quick generation is TOEIC-oriented and practical',()=>{ assert.match(quickApi,/TOEIC-oriented/); assert.match(quickApi,/internal email, memo, notice, announcement/); assert.match(quickApi,/practical CEFR B1–B2 vocabulary/); });

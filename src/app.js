@@ -20,7 +20,7 @@ function renderHome() {
   activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
   document.title = 'Reading Rating — 英語読解トレーニング';
   if (store.internalRating === null || store.internalRating === undefined) { renderRatingSetup(); return; }
-  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">TRAINING</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><div><span class="mode-number">01</span><p class="mode-kicker">SPEED</p><h2>Quick <small>速読</small></h2><p>3 passages · 9 questions</p></div><button class="primary-button" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><div><span class="mode-number">02</span><p class="mode-kicker">DEPTH</p><h2>Long <small>長文</small></h2><p>5 questions · summary</p></div><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
+  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">TRAINING · VER 1.0</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><div><span class="mode-number">01</span><p class="mode-kicker">SPEED</p><h2>Quick <small>速読</small></h2><p>TOEIC-style · 3 passages · 9 questions</p></div><button class="primary-button" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><div><span class="mode-number">02</span><p class="mode-kicker">DEPTH</p><h2>Long <small>長文</small></h2><p>5 questions · summary</p></div><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
   app.querySelector('[data-start="long"]').onclick = startLong;
 }
@@ -36,7 +36,7 @@ async function requestContent(endpoint, payload, fallback, validate=(value)=>val
 }
 
 async function startQuick() {
-  renderLoading('Quick setを準備中', '短く、鮮明な3つの英文を選んでいます。');
+  renderLoading('Quick setを準備中', 'TOEICを意識した実務英文を3つ構成しています。');
   const passages = await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet);
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
   session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'reading', startedAt:nowSeconds(), limit:store.quickTimeLimit };
