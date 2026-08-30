@@ -71,9 +71,9 @@ const quickChoiceSets = [
 ];
 
 const quickMetadata = [
-  {title:'Removing Friction from City Travel',category:'public policy',shortSummary:'A Danish city tests mobility points that combine transport information and cycling facilities to make mixed-mode journeys easier.',centralThesis:'Small design changes and reliable information can alter travel choices by reducing practical friction rather than banning cars.',keywords:['mobility','transport','information','cycling','behavior'],mainExamples:['combined bus and bicycle facilities','shop owners reporting more visitors on foot']},
-  {title:'Why a Quiet Pause May Help Memory',category:'psychology',shortSummary:'An experiment suggests that a brief period without new stimulation can help recently formed memories settle.',centralThesis:'Short, unstructured pauses may support memory by reducing competing input, though their practical use requires further study.',keywords:['memory','attention','quiet','learning','stimulation'],mainExamples:['word-pair experiment','teachers pausing between difficult topics']},
-  {title:'How Choice Can Repair Customer Trust',category:'behavioral science',shortSummary:'A grocery service finds that specific explanations and meaningful compensation choices can rebuild trust after ordinary delays.',centralThesis:'Trust recovery depends on honesty, agency, and proportionate action rather than a uniform apology or reward.',keywords:['trust','choice','compensation','apology','service'],mainExamples:['refund, credit, or donation choices','customers responding to specific explanations']},
+  {title:'Removing Friction from City Travel',category:'public policy',caseType:'policy experiment',settingType:'real',fictionalEntityName:'',organizationUsed:'a small Danish city',keyMechanism:'integrated transport information reduces switching friction',outcome:'more flexible travel choices and increased pedestrian visits',argumentPattern:'intervention followed by stakeholder concern and measured outcome',shortSummary:'A Danish city tests mobility points that combine transport information and cycling facilities to make mixed-mode journeys easier.',centralThesis:'Small design changes and reliable information can alter travel choices by reducing practical friction rather than banning cars.',keywords:['mobility','transport','information','cycling','behavior'],mainExamples:['combined bus and bicycle facilities','shop owners reporting more visitors on foot']},
+  {title:'Why a Quiet Pause May Help Memory',category:'psychology',caseType:'scientific experiment',settingType:'real',fictionalEntityName:'',organizationUsed:'an attention research team',keyMechanism:'reduced competing input after learning',outcome:'the quiet group recalled more word pairs',argumentPattern:'controlled comparison followed by a limited interpretation',shortSummary:'An experiment suggests that a brief period without new stimulation can help recently formed memories settle.',centralThesis:'Short, unstructured pauses may support memory by reducing competing input, though their practical use requires further study.',keywords:['memory','attention','quiet','learning','stimulation'],mainExamples:['word-pair experiment','teachers pausing between difficult topics']},
+  {title:'How Choice Can Repair Customer Trust',category:'behavioral science',caseType:'company service experiment',settingType:'fictional',fictionalEntityName:'the neighborhood grocery service',organizationUsed:'a neighborhood grocery delivery service',keyMechanism:'specific explanations plus customer-selected compensation',outcome:'store credit led while choice restored control',argumentPattern:'unexpected result followed by interviews and policy revision',shortSummary:'A grocery service finds that specific explanations and meaningful compensation choices can rebuild trust after ordinary delays.',centralThesis:'Trust recovery depends on honesty, agency, and proportionate action rather than a uniform apology or reward.',keywords:['trust','choice','compensation','apology','service'],mainExamples:['refund, credit, or donation choices','customers responding to specific explanations']},
 ];
 
 quickSet.forEach((passage, passageIndex) => {
@@ -84,6 +84,7 @@ quickSet.forEach((passage, passageIndex) => {
     question.choices = quickChoiceSets[passageIndex][questionIndex];
     question.explanation = enhancement.explanation;
     question.evidence = enhancement.evidence;
+    question.audit = {commonKnowledgeAnswerable:false,passageSpecificEvidence:true,specialistKnowledgeRequired:false,properNounRecall:false};
   });
 });
 
@@ -152,6 +153,7 @@ longPassage.questions.forEach((question, index) => {
   question.choices = longChoiceSets[index];
   question.explanation = enhancement.explanation;
   question.evidence = enhancement.evidence;
+  question.audit = {commonKnowledgeAnswerable:false,passageSpecificEvidence:true,specialistKnowledgeRequired:false,properNounRecall:false};
 });
 
 longPassage.vocabulary = {
@@ -167,4 +169,4 @@ longPassage.vocabulary = {
   prescribe:{contextMeaning:'利用方法を狭く規定する',basicMeaning:'規定する、処方する',partOfSpeech:'verb'},
 };
 
-Object.assign(longPassage,{category:'architecture',shortSummary:'The passage argues that public squares succeed when deliberate design supports unplanned use, broad access, and continued reinterpretation.',centralThesis:'Publicness depends less on ownership or measurable activity than on how permission, safety, and openness to unforeseen meanings are distributed.',keywords:['public space','design','measurement','access','permission','ambiguity'],mainExamples:['informal uses of steps and walls','visitor counts and rising rents','surveillance and loitering rules']});
+Object.assign(longPassage,{category:'architecture',caseType:'comparative urban analysis',settingType:'real',fictionalEntityName:'',organizationUsed:'municipal public-space authorities',keyMechanism:'design and management distribute practical permission unevenly',outcome:'measurable success can coexist with exclusion or displacement',argumentPattern:'concept definition followed by measurement critique, safety tension, and revised evaluation standard',shortSummary:'The passage argues that public squares succeed when deliberate design supports unplanned use, broad access, and continued reinterpretation.',centralThesis:'Publicness depends less on ownership or measurable activity than on how permission, safety, and openness to unforeseen meanings are distributed.',keywords:['public space','design','measurement','access','permission','ambiguity'],mainExamples:['informal uses of steps and walls','visitor counts and rising rents','surveillance and loitering rules']});
