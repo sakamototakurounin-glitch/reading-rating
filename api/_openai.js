@@ -14,7 +14,12 @@ export async function structuredCompletion({ system, user, schema, model='gpt-4.
     headers:{ Authorization:`Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type':'application/json' },
     body:JSON.stringify({ model, instructions:system, input:user, text:{ format:{ type:'json_schema', name:'result', strict:true, schema } } }),
   });
-  if (!response.ok) throw new Error(`OpenAI request failed: ${response.status}`);
+  if (!response.ok) {
+    const errorPayload = await response.json().catch(() => ({}));
+    throw new Error(errorPayload?.error?.message || `OpenAI request failed: ${response.status}`);
+  }
   const payload = await response.json();
-  return JSON.parse(payload.output_text);
+  const outputText = payload.output_text || payload.output?.flatMap((item) => item.content || []).find((content) => content.type === 'output_text')?.text;
+  if (!outputText) throw new Error('OpenAI response did not contain output text');
+  return JSON.parse(outputText);
 }
