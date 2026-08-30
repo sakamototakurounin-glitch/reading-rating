@@ -5,7 +5,8 @@ import { selectDifficulty } from '../lib/difficulty.js';
 import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds, validateLongContent, validateQuickSet } from '../lib/assessment.js';
 import { addPassagesToHistory, recentHistoryForPrompt } from '../lib/passage-history.js';
-import { quickSet, longPassage } from '../data/fallback.js';
+import { createLongGenerationContext } from '../lib/generation.js';
+import { quickSet } from '../data/fallback.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 
 const app = document.querySelector('#app');
@@ -18,7 +19,8 @@ const nowSeconds = () => performance.now() / 1000;
 
 function renderHome() {
   activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
-  document.title = 'Reading Rating ver 1.1';
+  document.body.classList.remove('question-active');
+  document.title = 'Reading Rating ver 1.2';
   if (store.internalRating === null || store.internalRating === undefined) { renderRatingSetup(); return; }
   app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">VER 1.1</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><h2>Quick</h2><button class="primary-button dark" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><h2>Long</h2><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
@@ -64,15 +66,16 @@ function renderQuickQuestions() {
 
 function renderTimedQuestion({mode,question,index,total,duration,label,confirmLabel='次へ',onRecorded,onNext}) {
   activeQuestionTimerCancel();
+  document.body.classList.add('question-active');
   const inputName=`${mode}-answer`; let selectedIndex=null; let settled=false; let remainingTime=duration*1000; let timerId=null; let startTimestamp=null; let deadlineTimestamp=null;
-  app.innerHTML=`<section class="focus-question"><div class="question-toolbar"><span>${label} · Question ${index+1} / ${total}</span><div class="question-timer" aria-live="polite"><span>残り</span><strong id="question-timer">${fmtTime(duration)}</strong></div></div><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,inputName)}</div></fieldset><div class="sticky-action"><button class="primary-button dark" type="button" data-confirm disabled>${confirmLabel} <span>→</span></button></div></form></section>`;
+  app.innerHTML=`<div class="question-toolbar fixed-question-timer"><span>${label} · Question ${index+1} / ${total}</span><div class="question-timer" aria-live="polite"><span>残り</span><strong id="question-timer">${fmtTime(duration)}</strong></div></div><section class="focus-question"><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,inputName)}</div></fieldset><div class="sticky-action"><button class="primary-button dark" type="button" data-confirm disabled>${confirmLabel} <span>→</span></button></div></form></section>`;
   const form=app.querySelector('form'); const timerElement=app.querySelector('#question-timer'); const warningAt=mode==='quick'?10:15;
   const cancelTimer=()=>{if(timerId!==null){clearInterval(timerId);timerId=null;}}; activeQuestionTimerCancel=cancelTimer;
   const tick=()=>{if(settled||deadlineTimestamp===null)return;remainingTime=Math.max(0,deadlineTimestamp-Date.now());timerElement.textContent=fmtTime(remainingTime/1000);timerElement.closest('.question-toolbar').classList.toggle('warning',remainingTime<=warningAt*1000);if(remainingTime<=0)settle(selectedIndex,true);};
   requestAnimationFrame(()=>requestAnimationFrame(()=>{if(settled)return;startTimestamp=Date.now();deadlineTimestamp=startTimestamp+duration*1000;remainingTime=duration*1000;timerElement.textContent=fmtTime(duration);timerId=setInterval(tick,200);tick();}));
   function settle(selected,timedOut=false) {
     if(settled)return; settled=true; cancelTimer(); activeQuestionTimerCancel=()=>{}; if(timedOut)timerElement.textContent='0:00';
-    onRecorded({selected,answer:question.answer,timedOut}); onNext();
+    document.body.classList.remove('question-active'); onRecorded({selected,answer:question.answer,timedOut}); onNext();
   }
   const confirm=app.querySelector('[data-confirm]');
   form.querySelectorAll(`input[name="${inputName}"]`).forEach((input)=>input.addEventListener('change',()=>{selectedIndex=Number(input.value);confirm.disabled=false;}));
@@ -91,10 +94,31 @@ function renderQuickResult() {
 }
 
 async function startLong() {
-  const difficulty = selectDifficulty(store.internalRating); renderLoading('Long passageを準備中', '現在のReading Ratingに合う文章を構成しています。');
-  const content = await requestContent('/api/generate-long', { difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory) }, longPassage, validateLongContent);
-  store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
-  session = { mode:'long', content, difficulty, unknownWords:new Map(), phase:'reading', startedAt:nowSeconds(),readingLimit:longReadingLimitSeconds(content.passage) }; renderLongReading();
+  activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{}; document.body.classList.remove('question-active'); session=null;
+  const difficulty=selectDifficulty(store.internalRating); const context=createLongGenerationContext();
+  session={mode:'long',...context,difficulty,content:null,phase:'generating'}; renderLoading('Long passageを準備中','新しい文章を生成しています。');
+  try {
+    const content=await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)});
+    if(session?.sessionId!==context.sessionId)return;
+    store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
+    session={...session,content,unknownWords:new Map(),phase:'reading',startedAt:nowSeconds(),readingLimit:longReadingLimitSeconds(content.passage)}; renderLongReading();
+  } catch {
+    if(session?.sessionId===context.sessionId)renderLongGenerationError();
+  }
+}
+
+async function requestFreshLong(payload) {
+  const response=await fetch(`/api/generate-long?generationId=${encodeURIComponent(payload.generationId)}`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','X-Generation-ID':payload.generationId},body:JSON.stringify(payload)});
+  if(!response.ok)throw new Error('Long generation failed');
+  const content=validateLongContent(await response.json());
+  if(content.generationId!==payload.generationId||content.sessionId!==payload.sessionId)throw new Error('Generation identity mismatch');
+  return content;
+}
+
+function renderLongGenerationError() {
+  session=null;
+  app.innerHTML=`<section class="generation-error" role="alert"><p class="eyebrow">GENERATION ERROR</p><h1>文章の生成に失敗しました。</h1><p>通信状況を確認して、もう一度お試しください。</p><div><button class="primary-button dark" data-retry-long>再試行する <span>↻</span></button><button class="text-button" data-home>ホームへ戻る</button></div></section>`;
+  app.querySelector('[data-retry-long]').onclick=startLong; app.querySelector('[data-home]').onclick=renderHome;
 }
 
 function renderLongReading() {

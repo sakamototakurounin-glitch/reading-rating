@@ -1,5 +1,11 @@
 export function jsonResponse(response, status, data) {
-  response.status(status).setHeader('Content-Type', 'application/json; charset=utf-8').send(JSON.stringify(data));
+  response
+    .status(status)
+    .setHeader('Content-Type', 'application/json; charset=utf-8')
+    .setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+    .setHeader('CDN-Cache-Control', 'no-store')
+    .setHeader('Vercel-CDN-Cache-Control', 'no-store')
+    .send(JSON.stringify(data));
 }
 
 export function parseRequest(request) {

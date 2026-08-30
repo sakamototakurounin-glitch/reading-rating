@@ -190,9 +190,15 @@ html,body { max-width:100%; overflow-x:hidden; }
 .sticky-action { position:fixed; z-index:9; left:0; right:0; bottom:0; padding:10px max(14px,calc((100% - 720px)/2)) calc(10px + env(safe-area-inset-bottom)); background:linear-gradient(transparent,var(--cream) 25%); }
 .sticky-action .primary-button { background:var(--ink); color:white; }
 .focus-question,.summary-page { min-height:calc(100dvh - 56px); padding:16px clamp(8px,2.5vw,28px) calc(82px + env(safe-area-inset-bottom)); max-width:1080px; margin:auto; display:flex; flex-direction:column; }
+body.question-active .compact-topbar { display:none; }
+body.question-active .focus-question { padding-top:calc(66px + env(safe-area-inset-top)); }
 .step-line { display:flex; justify-content:space-between; align-items:center; padding-bottom:12px; border-bottom:1px solid var(--line); font-size:11px; letter-spacing:.12em; font-weight:700; }
 .focus-question form { flex:1; display:flex; flex-direction:column; justify-content:center; }
-.question-toolbar { position:-webkit-sticky; position:sticky; top:0; z-index:30; min-height:48px; margin:calc(-1 * max(16px,env(safe-area-inset-top))) 0 8px; padding:max(10px,env(safe-area-inset-top)) 12px 10px; display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--line); background:rgba(245,241,232,.96); backdrop-filter:blur(14px); font-size:11px; letter-spacing:.08em; font-weight:700; }
+.question-toolbar { position:fixed; top:0; left:0; right:0; z-index:9999; min-height:calc(50px + env(safe-area-inset-top)); margin:0; padding:env(safe-area-inset-top) max(14px,calc((100% - 1080px)/2)) 0; display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--line); background:var(--paper); font-size:11px; letter-spacing:.08em; font-weight:700; }
+.generation-error { min-height:calc(100dvh - 56px); padding:clamp(48px,10vw,120px) clamp(20px,8vw,110px); display:grid; align-content:center; justify-items:start; }
+.generation-error h1 { max-width:850px; margin:12px 0 20px; font-size:clamp(36px,6vw,72px); }
+.generation-error > p:not(.eyebrow) { color:var(--muted); }
+.generation-error > div { display:flex; flex-wrap:wrap; align-items:center; gap:18px; margin-top:20px; }
 .question-timer { display:flex; align-items:center; gap:9px; padding:6px 9px; border:1px solid var(--line); background:var(--paper); font-variant-numeric:tabular-nums; }
 .question-timer span { color:var(--muted); font-size:10px; letter-spacing:.08em; }
 .question-timer strong { min-width:38px; text-align:right; font-size:17px; }
