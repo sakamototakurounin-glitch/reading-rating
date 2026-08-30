@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="速さと深さ、2つの軸で英語を読む力を育てるトレーニングサイト。" />
+    <meta property="og:title" content="Reading Rating" />
+    <meta property="og:description" content="速さと深さ、2つの軸で英語を読む力を育てる。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Reading Rating" />
+    <meta name="twitter:description" content="速さと深さ、2つの軸で英語を読む力を育てる。" />
+    <meta name="twitter:image" content="/og.png" />
+    <title>Reading Rating</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Reading Rating ホーム">
+          <span class="brand-mark">R</span><span>Reading Rating</span>
+        </a>
+        <button class="history-link" type="button" data-action="history">履歴</button>
+      </header>
+      <main id="app" tabindex="-1">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">READ WITH INTENT</p>
+            <h1>読む速さも、<br><em>読み解く深さ</em>も。</h1>
+            <p class="lede">短い英文でテンポを磨く Quick。長文を記憶し、考え抜く Long。今日の読解力を、次の一歩へ。</p>
+          </div>
+          <div class="rating-orbit" aria-label="現在のReading Rating 63">
+            <div class="orbit-label">READING RATING</div>
+            <div class="rating-number" id="rating-display">63</div>
+            <div class="rating-note">your current measure</div>
+          </div>
+        </section>
+        <section class="mode-grid" aria-label="トレーニングモード">
+          <article class="mode-card quick-card">
+            <div class="mode-index">01</div>
+            <p class="mode-kicker">PACE &amp; PRECISION</p>
+            <h2>Quick <span>速読</span></h2>
+            <p>約200語の英文を3本。正確さを保ちながら、読むテンポを一段ずつ上げていきます。</p>
+            <div class="mode-meta"><span>3 passages</span><span>9 questions</span></div>
+            <button class="primary-button" type="button" data-start="quick">Quick を始める <span>→</span></button>
+          </article>
+          <article class="mode-card long-card">
+            <div class="mode-index">02</div>
+            <p class="mode-kicker">DEPTH &amp; RETENTION</p>
+            <h2>Long <span>長文読解</span></h2>
+            <p>800〜1200語を読み、本文を閉じてから回答。理解・記憶・構造把握を測ります。</p>
+            <div class="mode-meta"><span>5 questions</span><span>+ summary</span></div>
+            <button class="primary-button dark" type="button" data-start="long">Long を始める <span>→</span></button>
+          </article>
+        </section>
+        <section class="principle-strip">
+          <p>速さだけでも、正確さだけでもない。</p>
+          <div class="principle-line"><span>PACE</span><i></i><span>COMPREHENSION</span><i></i><span>GROWTH</span></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
