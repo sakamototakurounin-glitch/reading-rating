@@ -8,6 +8,7 @@ const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const quickApi = await readFile(new URL('../api/generate-quick.js', import.meta.url), 'utf8');
 const longApi = await readFile(new URL('../api/generate-long.js', import.meta.url), 'utf8');
 const gradeApi = await readFile(new URL('../api/grade-summary.js', import.meta.url), 'utf8');
+const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 
 test('top screen uses compact modes and profile instead of rating hero',()=>{
   assert.match(app,/compact-home/); assert.doesNotMatch(app,/rating-orbit/); assert.match(html,/profile-button/);
@@ -33,3 +34,6 @@ test('timed questions expose collapsed explanation and translation controls',()=
 test('Long has WPM50 reading limit, concrete vocabulary, and structured summary feedback',()=>{
   assert.match(app,/longReadingLimitSeconds/); assert.match(app,/resolveUnknownWords/); assert.match(app,/contextMeaning/); assert.match(gradeApi,/goodPoints/); assert.match(gradeApi,/missingPoints/); assert.match(gradeApi,/modelAnswer/);
 });
+test('question timer starts after paint, uses a deadline, and stops on choice',()=>{ assert.match(app,/requestAnimationFrame\(\(\)=>requestAnimationFrame/); assert.match(app,/deadlineTimestamp=startTimestamp\+duration\*1000/); assert.match(app,/deadlineTimestamp-Date\.now\(\)/); assert.match(app,/addEventListener\('change',\(\)=>settle/); assert.match(app,/activeQuestionTimerCancel/); });
+test('question timer is a sticky safe-area toolbar with separate warning thresholds',()=>{ assert.match(app,/mode==='quick'\?10:15/); assert.match(app,/question-toolbar/); assert.match(styles,/\.question-toolbar \{ position:sticky/); assert.match(styles,/env\(safe-area-inset-top\)/); });
+test('recent semantic history is sent for both generators',()=>{ assert.match(app,/recentPassages:recentHistoryForPrompt/); assert.match(quickApi,/centralThesis/); assert.match(quickApi,/mainExamples/); assert.match(longApi,/buildDifficultyProfile/); assert.match(longApi,/isTooSimilar/); });

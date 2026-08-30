@@ -4,17 +4,20 @@ import { RATING } from '../lib/config.js';
 import { selectDifficulty } from '../lib/difficulty.js';
 import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds, validateLongContent, validateQuickSet } from '../lib/assessment.js';
+import { addPassagesToHistory, recentHistoryForPrompt } from '../lib/passage-history.js';
 import { quickSet, longPassage } from '../data/fallback.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 
 const app = document.querySelector('#app');
 let store = loadState();
 let session = null;
+let activeQuestionTimerCancel = () => {};
 const fmtTime = (seconds) => { const value=Math.max(0,Math.ceil(seconds)); return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`; };
 const escapeHtml = (value='') => value.replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
 const nowSeconds = () => performance.now() / 1000;
 
 function renderHome() {
+  activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
   document.title = 'Reading Rating — 英語読解トレーニング';
   if (store.internalRating === null || store.internalRating === undefined) { renderRatingSetup(); return; }
   app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">TRAINING</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><div><span class="mode-number">01</span><p class="mode-kicker">SPEED</p><h2>Quick <small>速読</small></h2><p>3 passages · 9 questions</p></div><button class="primary-button" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><div><span class="mode-number">02</span><p class="mode-kicker">DEPTH</p><h2>Long <small>長文</small></h2><p>5 questions · summary</p></div><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
@@ -34,7 +37,8 @@ async function requestContent(endpoint, payload, fallback, validate=(value)=>val
 
 async function startQuick() {
   renderLoading('Quick setを準備中', '短く、鮮明な3つの英文を選んでいます。');
-  const passages = await requestContent('/api/generate-quick', {}, quickSet, validateQuickSet);
+  const passages = await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet);
+  store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
   session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'reading', startedAt:nowSeconds(), limit:store.quickTimeLimit };
   renderQuickReading();
 }
@@ -58,19 +62,22 @@ function renderQuickQuestions() {
 }
 
 function renderTimedQuestion({mode,question,index,total,duration,translation,label,onRecorded,onNext}) {
-  const inputName=`${mode}-answer`; let settled=false; const startedAt=nowSeconds();
-  app.innerHTML=`<section class="focus-question"><div class="step-line"><span>${label}</span><span>${index+1}/${total}</span></div><div class="question-timer" aria-live="polite"><span>回答時間</span><strong id="question-timer">${fmtTime(duration)}</strong></div><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,inputName)}</div></fieldset><p class="form-notice" hidden>回答を選んでください。</p><section class="answer-feedback" hidden><p data-answer-status></p><div class="feedback-tools"><button type="button" data-toggle="explanation">解説を見る</button><button type="button" data-toggle="translation">全文和訳を見る</button></div><div class="learning-panel" data-panel="explanation" hidden><h2>解説</h2><p><b>正解：</b>${String.fromCharCode(65+question.answer)}. ${escapeHtml(question.choices[question.answer])}</p><p>${escapeHtml(question.explanation)}</p><p><b>本文の根拠：</b>${escapeHtml(question.evidence)}</p></div><div class="learning-panel translation-panel" data-panel="translation" hidden><h2>本文の日本語訳</h2>${translationHtml(translation)}</div></section><div class="sticky-action"><button class="primary-button dark" type="submit" data-submit-answer>回答する <span>→</span></button><button class="primary-button dark" type="button" data-next hidden>次へ <span>→</span></button></div></form></section>`;
-  const form=app.querySelector('form'); const timerElement=app.querySelector('#question-timer');
-  const timer=setInterval(()=>{const left=Math.max(0,duration-(nowSeconds()-startedAt));timerElement.textContent=fmtTime(left);timerElement.parentElement.classList.toggle('warning',left<=10);if(left<=0)settle(null,true);},250);
+  activeQuestionTimerCancel();
+  const inputName=`${mode}-answer`; let settled=false; let remainingTime=duration*1000; let timerId=null; let startTimestamp=null; let deadlineTimestamp=null;
+  app.innerHTML=`<section class="focus-question"><div class="question-toolbar"><span>${label} · Question ${index+1} / ${total}</span><div class="question-timer" aria-live="polite"><span>残り</span><strong id="question-timer">${fmtTime(duration)}</strong></div></div><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,inputName)}</div></fieldset><section class="answer-feedback" hidden><p data-answer-status></p><div class="feedback-tools"><button type="button" data-toggle="explanation">解説を見る</button><button type="button" data-toggle="translation">全文和訳を見る</button></div><div class="learning-panel" data-panel="explanation" hidden><h2>解説</h2><p><b>正解：</b>${String.fromCharCode(65+question.answer)}. ${escapeHtml(question.choices[question.answer])}</p><p>${escapeHtml(question.explanation)}</p><p><b>本文の根拠：</b>${escapeHtml(question.evidence)}</p></div><div class="learning-panel translation-panel" data-panel="translation" hidden><h2>本文の日本語訳</h2>${translationHtml(translation)}</div></section><div class="sticky-action"><p class="tap-to-answer">選択肢をタップすると回答が確定します</p><button class="primary-button dark" type="button" data-next hidden>次へ <span>→</span></button></div></form></section>`;
+  const form=app.querySelector('form'); const timerElement=app.querySelector('#question-timer'); const warningAt=mode==='quick'?10:15;
+  const cancelTimer=()=>{if(timerId!==null){clearInterval(timerId);timerId=null;}}; activeQuestionTimerCancel=cancelTimer;
+  const tick=()=>{if(settled||deadlineTimestamp===null)return;remainingTime=Math.max(0,deadlineTimestamp-Date.now());timerElement.textContent=fmtTime(remainingTime/1000);timerElement.closest('.question-toolbar').classList.toggle('warning',remainingTime<=warningAt*1000);if(remainingTime<=0)settle(null,true);};
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(settled)return;startTimestamp=Date.now();deadlineTimestamp=startTimestamp+duration*1000;remainingTime=duration*1000;timerElement.textContent=fmtTime(duration);timerId=setInterval(tick,200);tick();}));
   function settle(selected,timedOut=false) {
-    if(settled)return; settled=true; clearInterval(timer); timerElement.textContent='0:00';
+    if(settled)return; settled=true; cancelTimer(); activeQuestionTimerCancel=()=>{}; if(timedOut)timerElement.textContent='0:00';
     onRecorded({selected,answer:question.answer,timedOut});
     form.querySelectorAll('input').forEach((input)=>{input.disabled=true;const labelElement=input.closest('label');if(Number(input.value)===question.answer)labelElement.classList.add('is-correct');if(selected!==null&&Number(input.value)===selected&&selected!==question.answer)labelElement.classList.add('is-wrong');});
     const correct=selected===question.answer; const status=app.querySelector('[data-answer-status]');
     status.textContent=timedOut?`時間切れ（正解：${String.fromCharCode(65+question.answer)}）`:correct?'正解です':`不正解（正解：${String.fromCharCode(65+question.answer)}）`;
-    status.className=correct?'correct':'incorrect'; app.querySelector('.answer-feedback').hidden=false; app.querySelector('[data-submit-answer]').hidden=true; app.querySelector('[data-next]').hidden=false;
+    status.className=correct?'correct':'incorrect'; app.querySelector('.answer-feedback').hidden=false; app.querySelector('.tap-to-answer').hidden=true; app.querySelector('[data-next]').hidden=false;
   }
-  form.onsubmit=(event)=>{event.preventDefault();const selected=form.elements[inputName].value;if(selected===''){app.querySelector('.form-notice').hidden=false;return;}settle(Number(selected));};
+  form.querySelectorAll(`input[name="${inputName}"]`).forEach((input)=>input.addEventListener('change',()=>settle(Number(input.value)),{once:true}));
   app.querySelector('[data-next]').onclick=onNext;
   app.querySelectorAll('[data-toggle]').forEach((button)=>button.onclick=()=>{const panel=app.querySelector(`[data-panel="${button.dataset.toggle}"]`);panel.hidden=!panel.hidden;button.textContent=panel.hidden?(button.dataset.toggle==='explanation'?'解説を見る':'全文和訳を見る'):(button.dataset.toggle==='explanation'?'解説を閉じる':'全文和訳を閉じる');});
 }
@@ -88,7 +95,8 @@ function renderQuickResult() {
 
 async function startLong() {
   const difficulty = selectDifficulty(store.internalRating); renderLoading('Long passageを準備中', '現在のReading Ratingに合う文章を構成しています。');
-  const content = await requestContent('/api/generate-long', { difficulty }, longPassage, validateLongContent);
+  const content = await requestContent('/api/generate-long', { difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory) }, longPassage, validateLongContent);
+  store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
   session = { mode:'long', content, difficulty, unknownWords:new Map(), phase:'reading', startedAt:nowSeconds(),readingLimit:longReadingLimitSeconds(content.passage) }; renderLongReading();
 }
 
@@ -154,6 +162,7 @@ function renderResult(kicker,score,subcopy,stats,extra='') { app.innerHTML=`<sec
 function renderLoading(title,detail) { app.innerHTML=`<section class="loading-view"><div class="loader-ring"></div><p class="eyebrow">PLEASE WAIT</p><h1 class="section-title">${title}</h1><p>${detail}</p></section>`; }
 
 function renderProfile() {
+  activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
   const quick=store.quickHistory; const long=store.longHistory; const recentWpm=quick[0]?.averageWPM||'—'; const bestWpm=quick.length?Math.max(...quick.map((item)=>item.averageWPM)):0; const averageWpm=quick.length?Math.round(quick.reduce((sum,item)=>sum+item.averageWPM,0)/quick.length):0;
   app.innerHTML=`<section class="profile-page"><div class="profile-rating"><p>Reading Rating</p><strong>${displayRating(store.internalRating)}</strong>${long.length<RATING.calibrationSessions?`<small>初回調整 ${long.length}/${RATING.calibrationSessions}</small>`:''}</div><div class="profile-stats"><article><span>Long</span><strong>${long.length}</strong><small>sessions</small></article><article><span>Recent WPM</span><strong>${recentWpm}</strong><small>Quick</small></article><article><span>Best WPM</span><strong>${bestWpm||'—'}</strong><small>Avg ${averageWpm||'—'}</small></article><article><span>Total</span><strong>${long.length+quick.length}</strong><small>sessions</small></article></div><div class="profile-links"><button class="primary-button" data-history="long">Long 履歴 <span>→</span></button><button class="primary-button" data-history="quick">Quick 履歴 <span>→</span></button></div><details class="settings-panel"><summary>設定</summary><div class="settings-content"><div><strong>最初から始める</strong><p>履歴とRatingを削除し、初期Ratingの選択に戻ります。</p></div><button type="button" class="danger-button" data-reset>最初から</button><div class="reset-confirm" hidden><p>すべての学習データを削除します。元に戻せません。</p><button type="button" data-cancel-reset>キャンセル</button><button type="button" class="danger-button" data-confirm-reset>削除して最初から</button></div></div></details><button class="text-button profile-home" data-home>← ホーム</button></section>`;
   app.querySelectorAll('[data-history]').forEach((button)=>button.onclick=()=>renderHistory(button.dataset.history)); app.querySelector('[data-home]').onclick=renderHome;

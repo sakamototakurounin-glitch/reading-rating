@@ -70,7 +70,14 @@ const quickChoiceSets = [
   ],
 ];
 
+const quickMetadata = [
+  {title:'Removing Friction from City Travel',category:'public policy',shortSummary:'A Danish city tests mobility points that combine transport information and cycling facilities to make mixed-mode journeys easier.',centralThesis:'Small design changes and reliable information can alter travel choices by reducing practical friction rather than banning cars.',keywords:['mobility','transport','information','cycling','behavior'],mainExamples:['combined bus and bicycle facilities','shop owners reporting more visitors on foot']},
+  {title:'Why a Quiet Pause May Help Memory',category:'psychology',shortSummary:'An experiment suggests that a brief period without new stimulation can help recently formed memories settle.',centralThesis:'Short, unstructured pauses may support memory by reducing competing input, though their practical use requires further study.',keywords:['memory','attention','quiet','learning','stimulation'],mainExamples:['word-pair experiment','teachers pausing between difficult topics']},
+  {title:'How Choice Can Repair Customer Trust',category:'behavioral science',shortSummary:'A grocery service finds that specific explanations and meaningful compensation choices can rebuild trust after ordinary delays.',centralThesis:'Trust recovery depends on honesty, agency, and proportionate action rather than a uniform apology or reward.',keywords:['trust','choice','compensation','apology','service'],mainExamples:['refund, credit, or donation choices','customers responding to specific explanations']},
+];
+
 quickSet.forEach((passage, passageIndex) => {
+  Object.assign(passage,quickMetadata[passageIndex]);
   passage.translation = quickTranslations[passageIndex];
   passage.questions.forEach((question, questionIndex) => {
     const enhancement = quickEnhancements[passageIndex][questionIndex];
@@ -159,3 +166,5 @@ longPassage.vocabulary = {
   legibility:{contextMeaning:'空間の使い方の分かりやすさ',basicMeaning:'読みやすさ、理解しやすさ',partOfSpeech:'noun'},
   prescribe:{contextMeaning:'利用方法を狭く規定する',basicMeaning:'規定する、処方する',partOfSpeech:'verb'},
 };
+
+Object.assign(longPassage,{category:'architecture',shortSummary:'The passage argues that public squares succeed when deliberate design supports unplanned use, broad access, and continued reinterpretation.',centralThesis:'Publicness depends less on ownership or measurable activity than on how permission, safety, and openness to unforeseen meanings are distributed.',keywords:['public space','design','measurement','access','permission','ambiguity'],mainExamples:['informal uses of steps and walls','visitor counts and rising rents','surveillance and loitering rules']});

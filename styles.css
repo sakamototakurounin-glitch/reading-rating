@@ -173,10 +173,11 @@ html,body { max-width:100%; overflow-x:hidden; }
 .focus-question,.summary-page { min-height:calc(100dvh - 56px); padding:16px clamp(14px,5vw,52px) calc(82px + env(safe-area-inset-bottom)); max-width:860px; margin:auto; display:flex; flex-direction:column; }
 .step-line { display:flex; justify-content:space-between; align-items:center; padding-bottom:12px; border-bottom:1px solid var(--line); font-size:11px; letter-spacing:.12em; font-weight:700; }
 .focus-question form { flex:1; display:flex; flex-direction:column; justify-content:center; }
-.question-timer { align-self:flex-end; margin:10px 0 -4px; display:flex; align-items:center; gap:9px; padding:7px 11px; border:1px solid var(--line); background:var(--paper); font-variant-numeric:tabular-nums; }
+.question-toolbar { position:sticky; top:0; z-index:20; min-height:48px; margin:calc(-1 * max(16px,env(safe-area-inset-top))) 0 8px; padding:max(10px,env(safe-area-inset-top)) 12px 10px; display:flex; align-items:center; justify-content:space-between; gap:14px; border-bottom:1px solid var(--line); background:rgba(245,241,232,.96); backdrop-filter:blur(14px); font-size:11px; letter-spacing:.08em; font-weight:700; }
+.question-timer { display:flex; align-items:center; gap:9px; padding:6px 9px; border:1px solid var(--line); background:var(--paper); font-variant-numeric:tabular-nums; }
 .question-timer span { color:var(--muted); font-size:10px; letter-spacing:.08em; }
 .question-timer strong { min-width:38px; text-align:right; font-size:17px; }
-.question-timer.warning { color:#a33b2f; border-color:#d58b7f; background:#fff4f1; }
+.question-toolbar.warning .question-timer { color:#a33b2f; border-color:#d58b7f; background:#fff4f1; }
 .single-question { border:0; padding:16px 0; }
 .single-question legend { font-size:clamp(19px,3vw,28px); line-height:1.45; }
 .single-question .choice-list { margin:20px 0 0; }
@@ -195,6 +196,7 @@ html,body { max-width:100%; overflow-x:hidden; }
 .learning-panel p { margin:0 0 10px; }
 .translation-panel { font-family:"Noto Sans JP",sans-serif; }
 .reading-warning { margin:10px auto 0; width:max-content; max-width:100%; padding:7px 10px; background:#fff0d1; color:#745313; font-size:12px; }
+.tap-to-answer { margin:0; padding:13px; text-align:center; color:var(--muted); background:var(--paper); border:1px solid var(--line); font-size:12px; }
 .focus-question .form-notice,.summary-page .form-notice { margin:8px 0; padding:10px; }
 .summary-page form { flex:1; display:flex; flex-direction:column; }
 .summary-prompt { padding:18px 0 10px; }
