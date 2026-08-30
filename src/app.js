@@ -22,7 +22,7 @@ function renderHome() {
   document.body.classList.remove('question-active');
   document.title = 'Reading Rating ver 1.2';
   if (store.internalRating === null || store.internalRating === undefined) { renderRatingSetup(); return; }
-  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">VER 1.1</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><h2>Quick</h2><button class="primary-button dark" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><h2>Long</h2><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
+  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">VER 1.2</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><h2>Quick</h2><button class="primary-button dark" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><h2>Long</h2><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
   app.querySelector('[data-start="long"]').onclick = startLong;
 }
