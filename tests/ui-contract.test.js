@@ -18,3 +18,6 @@ test('handwriting supports undo, clear, recognition, and editable text',()=>{
 test('quick and long answer one question at a time',()=>{
   assert.match(app,/single-question/); assert.match(app,/session\.questionIndex/); assert.match(app,/renderLongSummary/);
 });
+test('onboarding offers the requested initial ratings and profile reset',()=>{
+  assert.match(app,/initialOptions/); assert.match(app,/data-initial-rating/); assert.match(app,/data-confirm-reset/); assert.match(app,/renderRatingSetup/);
+});

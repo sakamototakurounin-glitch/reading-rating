@@ -1,5 +1,6 @@
-import { loadState, saveState } from '../lib/storage.js';
-import { displayRating, expectedAccuracy, passageRating, updateRating } from '../lib/rating.js';
+import { defaultState, loadState, resetState, saveState } from '../lib/storage.js';
+import { displayRating, expectedAccuracy, passageRating, updateRatingWithCalibration } from '../lib/rating.js';
+import { RATING } from '../lib/config.js';
 import { selectDifficulty } from '../lib/difficulty.js';
 import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { quickSet, longPassage } from '../data/fallback.js';
@@ -14,9 +15,15 @@ const nowSeconds = () => performance.now() / 1000;
 
 function renderHome() {
   document.title = 'Reading Rating — 英語読解トレーニング';
+  if (store.internalRating === null || store.internalRating === undefined) { renderRatingSetup(); return; }
   app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">TRAINING</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><div><span class="mode-number">01</span><p class="mode-kicker">SPEED</p><h2>Quick <small>速読</small></h2><p>3 passages · 9 questions</p></div><button class="primary-button" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><div><span class="mode-number">02</span><p class="mode-kicker">DEPTH</p><h2>Long <small>長文</small></h2><p>5 questions · summary</p></div><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
   app.querySelector('[data-start="long"]').onclick = startLong;
+}
+
+function renderRatingSetup() {
+  app.innerHTML=`<section class="rating-setup"><div><p class="eyebrow">FIRST SETUP</p><h1>最初のRatingを選択</h1><p>現在の読解力に近い数値を選んでください。</p></div><div class="rating-options">${RATING.initialOptions.map((rating)=>`<button type="button" data-initial-rating="${rating}">${rating}</button>`).join('')}</div></section>`;
+  app.querySelectorAll('[data-initial-rating]').forEach((button)=>button.onclick=()=>{store.internalRating=Number(button.dataset.initialRating);saveState(store);renderHome();});
 }
 
 async function requestContent(endpoint, payload, fallback) {
@@ -95,8 +102,8 @@ async function submitLong(event) {
   const mcCorrect=session.longAnswers.filter((a)=>a.selected===a.answer).length;
   renderLoading('採点中','理解の正確さと要約の質を確認しています。');
   const grade=await requestContent('/api/grade-summary',{passage:session.content.passage,summary},{score:gradeSummaryLocally(summary),feedback:'中心的な主張と主要な論点を、本文に沿って簡潔にまとめています。'});
-  const summaryScore=Math.max(0,Math.min(10,Math.round(Number(grade.score)||0))); const multipleChoiceScore=mcCorrect*3; const totalScore=multipleChoiceScore+summaryScore; const actual=totalScore/25; const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRating(oldRating,actual,expected); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime); const unknownWords=[...session.unknownWords].map(([word,translation])=>({word,translation}));
-  const record={date:new Date().toISOString(),internalRatingBefore:oldRating,internalRatingAfter:ratingUpdate.newRating,displayRatingBefore:displayRating(oldRating),displayRatingAfter:displayRating(ratingUpdate.newRating),passageDifficulty:session.difficulty,passageRating:passageRating(session.difficulty),expectedAccuracy:expected,actualAccuracy:actual,totalScore,multipleChoiceScore,summaryScore,readingTime:session.readingTime,WPM:wpm,unknownWords,passage:session.content,questions:session.content.questions,summary,feedback:grade.feedback};
+  const summaryScore=Math.max(0,Math.min(10,Math.round(Number(grade.score)||0))); const multipleChoiceScore=mcCorrect*3; const totalScore=multipleChoiceScore+summaryScore; const actual=totalScore/25; const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRatingWithCalibration(oldRating,actual,expected,store.longHistory.length); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime); const unknownWords=[...session.unknownWords].map(([word,translation])=>({word,translation}));
+  const record={date:new Date().toISOString(),internalRatingBefore:oldRating,internalRatingAfter:ratingUpdate.newRating,displayRatingBefore:displayRating(oldRating),displayRatingAfter:displayRating(ratingUpdate.newRating),ratingMultiplier:ratingUpdate.multiplier,passageDifficulty:session.difficulty,passageRating:passageRating(session.difficulty),expectedAccuracy:expected,actualAccuracy:actual,totalScore,multipleChoiceScore,summaryScore,readingTime:session.readingTime,WPM:wpm,unknownWords,passage:session.content,questions:session.content.questions,summary,feedback:grade.feedback};
   store.internalRating=ratingUpdate.newRating; store.longHistory.unshift(record); saveState(store); renderLongResult(record);
 }
 
@@ -116,8 +123,9 @@ function renderLoading(title,detail) { app.innerHTML=`<section class="loading-vi
 
 function renderProfile() {
   const quick=store.quickHistory; const long=store.longHistory; const recentWpm=quick[0]?.averageWPM||'—'; const bestWpm=quick.length?Math.max(...quick.map((item)=>item.averageWPM)):0; const averageWpm=quick.length?Math.round(quick.reduce((sum,item)=>sum+item.averageWPM,0)/quick.length):0;
-  app.innerHTML=`<section class="profile-page"><div class="profile-rating"><p>Reading Rating</p><strong>${displayRating(store.internalRating)}</strong></div><div class="profile-stats"><article><span>Long</span><strong>${long.length}</strong><small>sessions</small></article><article><span>Recent WPM</span><strong>${recentWpm}</strong><small>Quick</small></article><article><span>Best WPM</span><strong>${bestWpm||'—'}</strong><small>Avg ${averageWpm||'—'}</small></article><article><span>Total</span><strong>${long.length+quick.length}</strong><small>sessions</small></article></div><div class="profile-links"><button class="primary-button" data-history="long">Long 履歴 <span>→</span></button><button class="primary-button" data-history="quick">Quick 履歴 <span>→</span></button></div><button class="text-button profile-home" data-home>← ホーム</button></section>`;
+  app.innerHTML=`<section class="profile-page"><div class="profile-rating"><p>Reading Rating</p><strong>${displayRating(store.internalRating)}</strong>${long.length<RATING.calibrationSessions?`<small>初回調整 ${long.length}/${RATING.calibrationSessions}</small>`:''}</div><div class="profile-stats"><article><span>Long</span><strong>${long.length}</strong><small>sessions</small></article><article><span>Recent WPM</span><strong>${recentWpm}</strong><small>Quick</small></article><article><span>Best WPM</span><strong>${bestWpm||'—'}</strong><small>Avg ${averageWpm||'—'}</small></article><article><span>Total</span><strong>${long.length+quick.length}</strong><small>sessions</small></article></div><div class="profile-links"><button class="primary-button" data-history="long">Long 履歴 <span>→</span></button><button class="primary-button" data-history="quick">Quick 履歴 <span>→</span></button></div><details class="settings-panel"><summary>設定</summary><div class="settings-content"><div><strong>最初から始める</strong><p>履歴とRatingを削除し、初期Ratingの選択に戻ります。</p></div><button type="button" class="danger-button" data-reset>最初から</button><div class="reset-confirm" hidden><p>すべての学習データを削除します。元に戻せません。</p><button type="button" data-cancel-reset>キャンセル</button><button type="button" class="danger-button" data-confirm-reset>削除して最初から</button></div></div></details><button class="text-button profile-home" data-home>← ホーム</button></section>`;
   app.querySelectorAll('[data-history]').forEach((button)=>button.onclick=()=>renderHistory(button.dataset.history)); app.querySelector('[data-home]').onclick=renderHome;
+  const confirm=app.querySelector('.reset-confirm'); app.querySelector('[data-reset]').onclick=()=>{confirm.hidden=false;}; app.querySelector('[data-cancel-reset]').onclick=()=>{confirm.hidden=true;}; app.querySelector('[data-confirm-reset]').onclick=()=>{resetState();localStorage.removeItem('reading-rating-input-mode');store={...defaultState,longHistory:[],quickHistory:[]};renderRatingSetup();};
 }
 
 function renderHistory(filter='all') {
