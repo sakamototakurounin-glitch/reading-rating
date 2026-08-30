@@ -3,6 +3,7 @@ import { displayRating, expectedAccuracy, passageRating, updateRating } from '..
 import { selectDifficulty } from '../lib/difficulty.js';
 import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { quickSet, longPassage } from '../data/fallback.js';
+import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 
 const app = document.querySelector('#app');
 let store = loadState();
@@ -13,7 +14,7 @@ const nowSeconds = () => performance.now() / 1000;
 
 function renderHome() {
   document.title = 'Reading Rating — 英語読解トレーニング';
-  app.innerHTML = `<section class="hero"><div class="hero-copy"><p class="eyebrow">READ WITH INTENT</p><h1>読む速さも、<br><em>読み解く深さ</em>も。</h1><p class="lede">短い英文でテンポを磨く Quick。長文を記憶し、考え抜く Long。今日の読解力を、次の一歩へ。</p></div><div class="rating-orbit" aria-label="現在のReading Rating ${displayRating(store.internalRating)}"><div class="orbit-label">READING RATING</div><div class="rating-number">${displayRating(store.internalRating)}</div><div class="rating-note">your current measure</div></div></section><section class="mode-grid" aria-label="トレーニングモード"><article class="mode-card quick-card"><div class="mode-index">01</div><p class="mode-kicker">PACE & PRECISION</p><h2>Quick <span>速読</span></h2><p>約200語の英文を3本。正確さを保ちながら、読むテンポを一段ずつ上げていきます。</p><div class="mode-meta"><span>3 passages</span><span>9 questions</span><span>${store.quickTimeLimit} sec each</span></div><button class="primary-button" data-start="quick">Quick を始める <span>→</span></button></article><article class="mode-card long-card"><div class="mode-index">02</div><p class="mode-kicker">DEPTH & RETENTION</p><h2>Long <span>長文読解</span></h2><p>800〜1200語を読み、本文を閉じてから回答。理解・記憶・構造把握を測ります。</p><div class="mode-meta"><span>5 questions</span><span>+ summary</span></div><button class="primary-button dark" data-start="long">Long を始める <span>→</span></button></article></section><section class="principle-strip"><p>速さだけでも、正確さだけでもない。</p><div class="principle-line"><span>PACE</span><i></i><span>COMPREHENSION</span><i></i><span>GROWTH</span></div></section>`;
+  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">TRAINING</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><div><span class="mode-number">01</span><p class="mode-kicker">SPEED</p><h2>Quick <small>速読</small></h2><p>3 passages · 9 questions</p></div><button class="primary-button" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><div><span class="mode-number">02</span><p class="mode-kicker">DEPTH</p><h2>Long <small>長文</small></h2><p>5 questions · summary</p></div><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
   app.querySelector('[data-start="long"]').onclick = startLong;
 }
@@ -32,7 +33,7 @@ async function startQuick() {
 
 function renderQuickReading() {
   const item = session.passages[session.passageIndex]; session.startedAt = nowSeconds();
-  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">QUICK ${session.passageIndex + 1} / 3</div><div class="timer-pill"><span>TIME GUIDE</span><b id="timer">${fmtTime(session.limit)}</b></div></section><article class="reading-layout"><aside><p class="eyebrow">${escapeHtml(item.topic)}</p><h1 class="article-title">Read for<br><em>meaning.</em></h1><p>細部に止まりすぎず、文章全体の流れをつかみましょう。</p></aside><div class="passage-panel"><p class="passage-text">${escapeHtml(item.passage)}</p><button class="primary-button dark" data-finish>読み終えて問題へ <span>→</span></button></div></article>`;
+  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">QUICK ${session.passageIndex + 1} / 3</div><div class="timer-pill"><span>TIME</span><b id="timer">${fmtTime(session.limit)}</b></div></section><article class="quick-reading"><p class="eyebrow">${escapeHtml(item.topic)}</p><div class="passage-scroll"><p class="passage-text">${escapeHtml(item.passage)}</p></div><div class="sticky-action"><button class="primary-button dark" data-finish>問題へ <span>→</span></button></div></article>`;
   const timer = app.querySelector('#timer');
   const tick = setInterval(() => { const left = Math.max(0, session.limit - (nowSeconds() - session.startedAt)); timer.textContent = fmtTime(left); if (left <= 0) finishQuickReading(); }, 250);
   session.timer = tick; app.querySelector('[data-finish]').onclick = finishQuickReading; app.querySelector('[data-home]').onclick = () => { clearInterval(tick); renderHome(); };
@@ -40,13 +41,13 @@ function renderQuickReading() {
 
 function finishQuickReading() {
   clearInterval(session.timer); if (session.phase !== 'reading') return; session.phase = 'questions';
-  session.readingTimes.push(Math.min(session.limit, Math.max(1, nowSeconds() - session.startedAt))); renderQuickQuestions();
+  session.readingTimes.push(Math.min(session.limit, Math.max(1, nowSeconds() - session.startedAt))); session.questionIndex=0; renderQuickQuestions();
 }
 
 function renderQuickQuestions() {
-  const item = session.passages[session.passageIndex];
-  app.innerHTML = `<section class="question-page"><header><p class="eyebrow">QUICK CHECK · ${session.passageIndex + 1}/3</p><h1 class="section-title">記憶をたどって答える。</h1><p>本文には戻れません。もっとも適切な答えを選んでください。</p></header><form class="question-list">${questionsHtml(item.questions, `q${session.passageIndex}`)}<button class="primary-button dark" type="submit">回答を確定 <span>→</span></button></form></section>`;
-  app.querySelector('form').onsubmit = (event) => { event.preventDefault(); if (!validateAnswered(event.currentTarget, item.questions.length)) return; item.questions.forEach((q,index) => session.answers.push({ selected:Number(new FormData(event.currentTarget).get(`q${session.passageIndex}-${index}`)), answer:q.answer })); session.passageIndex += 1; session.phase='reading'; session.passageIndex < 3 ? renderQuickReading() : renderQuickResult(); };
+  const item=session.passages[session.passageIndex]; const question=item.questions[session.questionIndex];
+  app.innerHTML=`<section class="focus-question"><div class="step-line"><span>QUICK ${session.passageIndex+1}/3</span><span>${session.questionIndex+1}/3</span></div><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,'quick-answer')}</div></fieldset><p class="form-notice" hidden>回答を選んでください。</p><div class="sticky-action"><button class="primary-button dark" type="submit">${session.questionIndex===2?'次の文章へ':'次の問題'} <span>→</span></button></div></form></section>`;
+  app.querySelector('form').onsubmit=(event)=>{event.preventDefault();const selected=event.currentTarget.elements['quick-answer'].value;if(selected===''){app.querySelector('.form-notice').hidden=false;return;}session.answers.push({selected:Number(selected),answer:question.answer});session.questionIndex+=1;if(session.questionIndex<3)renderQuickQuestions();else{session.passageIndex+=1;session.phase='reading';session.passageIndex<3?renderQuickReading():renderQuickResult();}};
 }
 
 function renderQuickResult() {
@@ -67,24 +68,31 @@ async function startLong() {
 function renderLongReading() {
   const { content } = session;
   const paragraphs = content.passage.split(/\n\s*\n/).map((p,i) => `<p data-paragraph="${i}">${tokenizeParagraph(p)}</p>`).join('');
-  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">LONG READING</div><div class="timer-pill"><span>READING TIME</span><b id="timer">0:00</b></div></section><article class="long-reading"><header class="article-header"><p class="eyebrow">${escapeHtml(content.topic)}</p><h1 class="section-title">${escapeHtml(content.title)}</h1><p class="tap-guide"><span></span> 知らない単語はタップして記録。意味は読了後に確認できます。</p></header><div class="long-copy">${paragraphs}</div><footer class="reading-footer"><p>本文は「読了」後に見返せません。</p><button class="primary-button dark" data-finish>読了・問題へ進む <span>→</span></button></footer></article>`;
+  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">LONG</div><div class="timer-pill"><span>TIME</span><b id="timer">0:00</b></div></section><article class="long-reading"><header class="article-header compact-article-header"><p class="eyebrow">${escapeHtml(content.topic)}</p><h1>${escapeHtml(content.title)}</h1><p class="tap-guide"><span></span> 未知語をタップ</p></header><div class="long-copy">${paragraphs}</div><footer class="reading-footer"><button class="primary-button dark" data-finish>読了・問題へ <span>→</span></button></footer></article>`;
   const updateTimer=()=>app.querySelector('#timer').textContent=fmtTime(nowSeconds()-session.startedAt); updateTimer(); session.timer=setInterval(updateTimer,1000);
   app.querySelectorAll('.word-token').forEach((button)=>button.onclick=()=>toggleUnknown(button)); app.querySelector('[data-finish]').onclick=finishLongReading; app.querySelector('[data-home]').onclick=()=>{clearInterval(session.timer);renderHome();};
 }
 
 function tokenizeParagraph(text) { return text.split(/(\s+)/).map((token)=>{ if (/^\s+$/.test(token)) return token; const word=token.toLowerCase().replace(/^[^a-z]+|[^a-z'-]+$/g,''); return word ? `<button type="button" class="word-token" data-word="${escapeHtml(word)}">${escapeHtml(token)}</button>` : escapeHtml(token); }).join(''); }
 function toggleUnknown(button) { const word=button.dataset.word; if(session.unknownWords.has(word)) session.unknownWords.delete(word); else session.unknownWords.set(word,session.content.vocabulary?.[word]||'（文脈に応じて確認）'); document.querySelectorAll(`[data-word="${CSS.escape(word)}"]`).forEach((el)=>el.classList.toggle('unknown',session.unknownWords.has(word))); }
-function finishLongReading() { clearInterval(session.timer); session.readingTime=Math.max(1,nowSeconds()-session.startedAt); session.phase='questions'; renderLongQuestions(); }
+function finishLongReading() { clearInterval(session.timer); session.readingTime=Math.max(1,nowSeconds()-session.startedAt); session.phase='questions'; session.questionIndex=0; session.longAnswers=[]; renderLongQuestions(); }
 
 function renderLongQuestions() {
-  const { questions }=session.content;
-  app.innerHTML=`<section class="question-page long-questions"><header><p class="eyebrow">COMPREHENSION & RETENTION</p><h1 class="section-title">文章を思い出し、<br>考えをまとめる。</h1><p>選択問題は各3点、日本語要約は10点です。</p></header><form class="question-list">${questionsHtml(questions,'long')}<div class="summary-card"><label for="summary">日本語要約 <span>10 points</span></label><p>文章の中心的な主張と、それを支える重要な論点を200〜300字程度でまとめてください。</p><textarea id="summary" name="summary" minlength="40" required placeholder="ここに日本語で要約を入力…"></textarea><div class="char-count"><span id="char-count">0</span> characters</div></div><button class="primary-button dark" type="submit">採点する <span>→</span></button></form></section>`;
-  const textarea=app.querySelector('textarea'); textarea.oninput=()=>app.querySelector('#char-count').textContent=textarea.value.length; app.querySelector('form').onsubmit=submitLong;
+  if(session.questionIndex>=session.content.questions.length){renderLongSummary();return;}
+  const question=session.content.questions[session.questionIndex];
+  app.innerHTML=`<section class="focus-question"><div class="step-line"><span>LONG · 選択問題</span><span>${session.questionIndex+1}/5</span></div><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,'long-answer')}</div></fieldset><p class="form-notice" hidden>回答を選んでください。</p><div class="sticky-action"><button class="primary-button dark" type="submit">次へ <span>→</span></button></div></form></section>`;
+  app.querySelector('form').onsubmit=(event)=>{event.preventDefault();const selected=event.currentTarget.elements['long-answer'].value;if(selected===''){app.querySelector('.form-notice').hidden=false;return;}session.longAnswers.push({selected:Number(selected),answer:question.answer});session.questionIndex+=1;renderLongQuestions();};
+}
+
+function renderLongSummary() {
+  app.innerHTML=`<section class="summary-page"><div class="step-line"><span>LONG · 日本語要約</span><span>10 points</span></div><div class="summary-prompt"><h1>日本語要約</h1><p>中心的な主張と重要な論点をまとめてください。</p></div><form>${answerInputHtml()}<p class="form-notice" hidden>40文字以上入力してください。</p><div class="sticky-action"><button class="primary-button dark" type="submit">採点する <span>→</span></button></div></form></section>`;
+  session.summaryInput=mountAnswerInput(app);
+  app.querySelector('form').onsubmit=submitLong;
 }
 
 async function submitLong(event) {
-  event.preventDefault(); const form=event.currentTarget; if(!validateAnswered(form,5)) return;
-  const answers=session.content.questions.map((q,i)=>({selected:Number(new FormData(form).get(`long-${i}`)),answer:q.answer})); const mcCorrect=answers.filter((a)=>a.selected===a.answer).length; const summary=new FormData(form).get('summary').trim();
+  event.preventDefault(); const summary=session.summaryInput.getValue(); if(summary.length<40){app.querySelector('.form-notice').hidden=false;return;}
+  const mcCorrect=session.longAnswers.filter((a)=>a.selected===a.answer).length;
   renderLoading('採点中','理解の正確さと要約の質を確認しています。');
   const grade=await requestContent('/api/grade-summary',{passage:session.content.passage,summary},{score:gradeSummaryLocally(summary),feedback:'中心的な主張と主要な論点を、本文に沿って簡潔にまとめています。'});
   const summaryScore=Math.max(0,Math.min(10,Math.round(Number(grade.score)||0))); const multipleChoiceScore=mcCorrect*3; const totalScore=multipleChoiceScore+summaryScore; const actual=totalScore/25; const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRating(oldRating,actual,expected); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime); const unknownWords=[...session.unknownWords].map(([word,translation])=>({word,translation}));
@@ -101,13 +109,20 @@ function renderLongResult(record) {
 }
 
 function questionsHtml(questions,prefix) { return questions.map((q,i)=>`<fieldset class="question-card"><legend><span>${String(i+1).padStart(2,'0')}</span>${escapeHtml(q.prompt)}</legend><div class="choice-list">${q.choices.map((choice,j)=>`<label><input type="radio" name="${prefix}-${i}" value="${j}"><span class="choice-marker">${String.fromCharCode(65+j)}</span><span>${escapeHtml(choice)}</span></label>`).join('')}</div></fieldset>`).join(''); }
+function choiceHtml(question,name) { return question.choices.map((choice,index)=>`<label><input type="radio" name="${name}" value="${index}"><span class="choice-marker">${String.fromCharCode(65+index)}</span><span>${escapeHtml(choice)}</span></label>`).join(''); }
 function validateAnswered(form,count) { const answered=new Set([...new FormData(form).keys()].filter((key)=>key!=='summary')).size; if(answered<count){form.querySelector('.form-notice')?.remove();form.insertAdjacentHTML('afterbegin','<p class="form-notice">すべての問題に回答してください。</p>');return false;}return true; }
-function renderResult(kicker,score,subcopy,stats) { app.innerHTML=`<section class="result-page"><div class="result-hero quick-result"><p class="eyebrow">${kicker}</p><div class="result-score">${score}</div><h1>Good rhythm.</h1><p>${subcopy}</p></div><div class="result-grid">${stats.map(([label,value],i)=>`<div class="result-stat ${i===0?'featured':''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div><div class="result-actions"><button class="primary-button" data-again>もう一度 Quick <span>↻</span></button><button class="primary-button dark" data-home>ホームへ <span>→</span></button></div></section>`;app.querySelector('[data-again]').onclick=startQuick;app.querySelector('[data-home]').onclick=renderHome; }
+function renderResult(kicker,score,subcopy,stats) { app.innerHTML=`<section class="result-page compact-result"><div class="result-hero quick-result"><p class="eyebrow">${kicker}</p><div class="result-score">${score}</div></div><div class="result-grid">${stats.map(([label,value],i)=>`<div class="result-stat ${i===0?'featured':''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div><div class="result-actions"><button class="primary-button" data-again>もう一度 <span>↻</span></button><button class="primary-button dark" data-home>ホーム <span>→</span></button></div></section>`;app.querySelector('[data-again]').onclick=startQuick;app.querySelector('[data-home]').onclick=renderHome; }
 function renderLoading(title,detail) { app.innerHTML=`<section class="loading-view"><div class="loader-ring"></div><p class="eyebrow">PLEASE WAIT</p><h1 class="section-title">${title}</h1><p>${detail}</p></section>`; }
 
-function renderHistory() {
-  const longRows=store.longHistory.map((r)=>`<tr><td>${new Date(r.date).toLocaleDateString('ja-JP')}</td><td>Long</td><td>${r.displayRatingBefore} → ${r.displayRatingAfter}</td><td>${r.totalScore}/25</td><td>${r.WPM} WPM</td></tr>`); const quickRows=store.quickHistory.map((r)=>`<tr><td>${new Date(r.date).toLocaleDateString('ja-JP')}</td><td>Quick</td><td>—</td><td>${r.correctAnswers}/9</td><td>${r.averageWPM} WPM</td></tr>`); const rows=[...longRows,...quickRows].join('')||'<tr><td colspan="5" class="empty-row">まだ履歴はありません。最初のトレーニングを始めましょう。</td></tr>';
-  app.innerHTML=`<section class="history-page"><header><p class="eyebrow">YOUR PROGRESS</p><h1 class="section-title">Reading history</h1><p>速さと深さ、それぞれの積み重ね。</p></header><div class="table-wrap"><table><thead><tr><th>Date</th><th>Mode</th><th>Rating</th><th>Score</th><th>Speed</th></tr></thead><tbody>${rows}</tbody></table></div><button class="primary-button dark" data-home>ホームへ <span>→</span></button></section>`;app.querySelector('[data-home]').onclick=renderHome;
+function renderProfile() {
+  const quick=store.quickHistory; const long=store.longHistory; const recentWpm=quick[0]?.averageWPM||'—'; const bestWpm=quick.length?Math.max(...quick.map((item)=>item.averageWPM)):0; const averageWpm=quick.length?Math.round(quick.reduce((sum,item)=>sum+item.averageWPM,0)/quick.length):0;
+  app.innerHTML=`<section class="profile-page"><div class="profile-rating"><p>Reading Rating</p><strong>${displayRating(store.internalRating)}</strong></div><div class="profile-stats"><article><span>Long</span><strong>${long.length}</strong><small>sessions</small></article><article><span>Recent WPM</span><strong>${recentWpm}</strong><small>Quick</small></article><article><span>Best WPM</span><strong>${bestWpm||'—'}</strong><small>Avg ${averageWpm||'—'}</small></article><article><span>Total</span><strong>${long.length+quick.length}</strong><small>sessions</small></article></div><div class="profile-links"><button class="primary-button" data-history="long">Long 履歴 <span>→</span></button><button class="primary-button" data-history="quick">Quick 履歴 <span>→</span></button></div><button class="text-button profile-home" data-home>← ホーム</button></section>`;
+  app.querySelectorAll('[data-history]').forEach((button)=>button.onclick=()=>renderHistory(button.dataset.history)); app.querySelector('[data-home]').onclick=renderHome;
 }
 
-document.querySelector('.history-link').onclick=renderHistory; document.querySelector('.brand').onclick=(event)=>{event.preventDefault();renderHome();}; renderHome();
+function renderHistory(filter='all') {
+  const longRows=filter==='quick'?[]:store.longHistory.map((r)=>`<tr><td>${new Date(r.date).toLocaleDateString('ja-JP')}</td><td>Long</td><td>${r.displayRatingBefore} → ${r.displayRatingAfter}</td><td>${r.totalScore}/25</td><td>${r.WPM} WPM</td></tr>`); const quickRows=filter==='long'?[]:store.quickHistory.map((r)=>`<tr><td>${new Date(r.date).toLocaleDateString('ja-JP')}</td><td>Quick</td><td>—</td><td>${r.correctAnswers}/9</td><td>${r.averageWPM} WPM</td></tr>`); const rows=[...longRows,...quickRows].join('')||'<tr><td colspan="5" class="empty-row">履歴はまだありません。</td></tr>';
+  app.innerHTML=`<section class="history-page compact-history"><header><p class="eyebrow">${filter.toUpperCase()} HISTORY</p><h1>${filter==='long'?'Long':'Quick'} 履歴</h1></header><div class="table-wrap"><table><thead><tr><th>Date</th><th>Mode</th><th>Rating</th><th>Score</th><th>Speed</th></tr></thead><tbody>${rows}</tbody></table></div><button class="text-button" data-profile>← プロフィール</button></section>`;app.querySelector('[data-profile]').onclick=renderProfile;
+}
+
+document.querySelector('.profile-button').onclick=()=>renderProfile(); document.querySelector('.brand').onclick=(event)=>{event.preventDefault();renderHome();}; renderHome();
