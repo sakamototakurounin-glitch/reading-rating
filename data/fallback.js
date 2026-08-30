@@ -157,16 +157,16 @@ longPassage.questions.forEach((question, index) => {
 });
 
 longPassage.vocabulary = {
-  ambiguity:{contextMeaning:'用途を一つに限定しない曖昧さ',basicMeaning:'曖昧さ、多義性',partOfSpeech:'noun'},
-  linger:{contextMeaning:'その場に長く留まる',basicMeaning:'長居する、残り続ける',partOfSpeech:'verb'},
-  paradoxical:{contextMeaning:'意図的な設計が予定外の行動を支えるという逆説的な',basicMeaning:'逆説的な、一見矛盾した',partOfSpeech:'adjective'},
-  displacing:{contextMeaning:'元からいた住民を立ち退かせること',basicMeaning:'移動させる、取って代わる',partOfSpeech:'verb'},
-  coexist:{contextMeaning:'知らない人々と同じ空間で共存する',basicMeaning:'共存する',partOfSpeech:'verb'},
-  surveillance:{contextMeaning:'公共空間で利用者を監視すること',basicMeaning:'監視、見張り',partOfSpeech:'noun'},
-  legitimate:{contextMeaning:'その場にいる正当な目的',basicMeaning:'正当な、合法的な',partOfSpeech:'adjective'},
-  distribution:{contextMeaning:'利用許可が人々にどう配分されるか',basicMeaning:'分配、配布、分布',partOfSpeech:'noun'},
-  legibility:{contextMeaning:'空間の使い方の分かりやすさ',basicMeaning:'読みやすさ、理解しやすさ',partOfSpeech:'noun'},
-  prescribe:{contextMeaning:'利用方法を狭く規定する',basicMeaning:'規定する、処方する',partOfSpeech:'verb'},
+  ambiguity:{contextMeaning:'用途を一つに限定しない曖昧さ',basicMeaning:'曖昧さ、多義性',partOfSpeech:'noun',exampleSentence:'The ambiguity of the rule allowed teams to adapt it to local needs.'},
+  linger:{contextMeaning:'その場に長く留まる',basicMeaning:'長居する、残り続ける',partOfSpeech:'verb',exampleSentence:'Several visitors lingered in the lobby after the presentation ended.'},
+  paradoxical:{contextMeaning:'意図的な設計が予定外の行動を支えるという逆説的な',basicMeaning:'逆説的な、一見矛盾した',partOfSpeech:'adjective',exampleSentence:'It seemed paradoxical that fewer instructions produced more consistent results.'},
+  displacing:{contextMeaning:'元からいた住民を立ち退かせること',basicMeaning:'移動させる、取って代わる',partOfSpeech:'verb',exampleSentence:'The renovation improved the district without displacing longtime residents.'},
+  coexist:{contextMeaning:'知らない人々と同じ空間で共存する',basicMeaning:'共存する',partOfSpeech:'verb',exampleSentence:'Traditional shops and new services can coexist on the same street.'},
+  surveillance:{contextMeaning:'公共空間で利用者を監視すること',basicMeaning:'監視、見張り',partOfSpeech:'noun',exampleSentence:'The station added surveillance while limiting access to recorded footage.'},
+  legitimate:{contextMeaning:'その場にいる正当な目的',basicMeaning:'正当な、合法的な',partOfSpeech:'adjective',exampleSentence:'Customers raised a legitimate concern about the revised return policy.'},
+  distribution:{contextMeaning:'利用許可が人々にどう配分されるか',basicMeaning:'分配、配布、分布',partOfSpeech:'noun',exampleSentence:'The company changed its distribution network to reach rural stores faster.'},
+  legibility:{contextMeaning:'空間の使い方の分かりやすさ',basicMeaning:'読みやすさ、理解しやすさ',partOfSpeech:'noun',exampleSentence:'Larger labels improved the legibility of the instructions.'},
+  prescribe:{contextMeaning:'利用方法を狭く規定する',basicMeaning:'規定する、処方する',partOfSpeech:'verb',exampleSentence:'The guidelines describe the goal without prescribing a single method.'},
 };
 
 Object.assign(longPassage,{category:'architecture',caseType:'comparative urban analysis',settingType:'real',fictionalEntityName:'',organizationUsed:'municipal public-space authorities',keyMechanism:'design and management distribute practical permission unevenly',outcome:'measurable success can coexist with exclusion or displacement',argumentPattern:'concept definition followed by measurement critique, safety tension, and revised evaluation standard',shortSummary:'The passage argues that public squares succeed when deliberate design supports unplanned use, broad access, and continued reinterpretation.',centralThesis:'Publicness depends less on ownership or measurable activity than on how permission, safety, and openness to unforeseen meanings are distributed.',keywords:['public space','design','measurement','access','permission','ambiguity'],mainExamples:['informal uses of steps and walls','visitor counts and rising rents','surveillance and loitering rules']});
