@@ -6,6 +6,7 @@ import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds, validateLongContent, validateQuickSet } from '../lib/assessment.js';
 import { addPassagesToHistory, recentHistoryForPrompt } from '../lib/passage-history.js';
 import { createLongGenerationContext } from '../lib/generation.js';
+import { balanceLongChoices, balanceQuickChoices } from '../lib/choice-shuffle.js';
 import { quickSet } from '../data/fallback.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 
@@ -39,7 +40,7 @@ async function requestContent(endpoint, payload, fallback, validate=(value)=>val
 
 async function startQuick() {
   renderLoading('Quick setを準備中', 'TOEICを意識した実務英文を3つ構成しています。');
-  const passages = await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet);
+  const passages = balanceQuickChoices(await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet));
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
   session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'reading', startedAt:nowSeconds(), limit:store.quickTimeLimit };
   renderQuickReading();
@@ -68,7 +69,7 @@ function renderTimedQuestion({mode,question,index,total,duration,label,confirmLa
   activeQuestionTimerCancel();
   document.body.classList.add('question-active');
   const inputName=`${mode}-answer`; let selectedIndex=null; let settled=false; let remainingTime=duration*1000; let timerId=null; let startTimestamp=null; let deadlineTimestamp=null;
-  app.innerHTML=`<div class="question-toolbar fixed-question-timer"><span>${label} · Question ${index+1} / ${total}</span><div class="question-timer" aria-live="polite"><span>残り</span><strong id="question-timer">${fmtTime(duration)}</strong></div></div><section class="focus-question"><form><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,inputName)}</div></fieldset><div class="sticky-action"><button class="primary-button dark" type="button" data-confirm disabled>${confirmLabel} <span>→</span></button></div></form></section>`;
+  app.innerHTML=`<div class="question-toolbar fixed-question-timer"><span>${label} · Question ${index+1} / ${total}</span><div class="question-timer" aria-live="polite"><span>残り</span><strong id="question-timer">${fmtTime(duration)}</strong></div></div><section class="focus-question"><form><div class="question-scroll"><fieldset class="question-card single-question"><legend>${escapeHtml(question.prompt)}</legend><div class="choice-list">${choiceHtml(question,inputName)}</div></fieldset></div><div class="question-action"><button class="primary-button dark" type="button" data-confirm disabled>${confirmLabel} <span>→</span></button></div></form></section>`;
   const form=app.querySelector('form'); const timerElement=app.querySelector('#question-timer'); const warningAt=mode==='quick'?10:15;
   const cancelTimer=()=>{if(timerId!==null){clearInterval(timerId);timerId=null;}}; activeQuestionTimerCancel=cancelTimer;
   const tick=()=>{if(settled||deadlineTimestamp===null)return;remainingTime=Math.max(0,deadlineTimestamp-Date.now());timerElement.textContent=fmtTime(remainingTime/1000);timerElement.closest('.question-toolbar').classList.toggle('warning',remainingTime<=warningAt*1000);if(remainingTime<=0)settle(selectedIndex,true);};
@@ -98,7 +99,7 @@ async function startLong() {
   const difficulty=selectDifficulty(store.internalRating); const context=createLongGenerationContext();
   session={mode:'long',...context,difficulty,content:null,phase:'generating'}; renderLoading('Long passageを準備中','新しい文章を生成しています。');
   try {
-    const content=await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)});
+    const content=balanceLongChoices(await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)}));
     if(session?.sessionId!==context.sessionId)return;
     store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
     session={...session,content,unknownWords:new Map(),phase:'reading',startedAt:nowSeconds(),readingLimit:longReadingLimitSeconds(content.passage)}; renderLongReading();
@@ -124,7 +125,7 @@ function renderLongGenerationError() {
 function renderLongReading() {
   const { content } = session;
   const paragraphs = content.passage.split(/\n\s*\n/).map((p,i) => `<p data-paragraph="${i}">${tokenizeParagraph(p)}</p>`).join('');
-  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">LONG</div><div class="timer-pill"><span>残り時間</span><b id="timer">${fmtTime(session.readingLimit)}</b></div></section><article class="long-reading"><header class="article-header compact-article-header"><p class="eyebrow">${escapeHtml(content.topic)}</p><h1>${escapeHtml(content.title)}</h1><p class="tap-guide"><span></span> 未知語をタップ</p><p class="reading-warning" hidden>残り1分です。まもなく問題へ移ります。</p></header><div class="long-copy">${paragraphs}</div><footer class="reading-footer"><button class="primary-button dark" data-finish>読了・問題へ <span>→</span></button></footer></article>`;
+  app.innerHTML = `<section class="long-reader-shell"><header class="long-reader-bar"><div><button class="text-button" data-home>← 終了</button><span class="passage-level">Level ${session.difficulty}</span></div><div class="timer-pill"><span>残り時間</span><b id="timer">${fmtTime(session.readingLimit)}</b></div></header><article class="long-passage-scroll"><header class="article-header compact-article-header"><p class="eyebrow">${escapeHtml(content.topic)}</p><h1>${escapeHtml(content.title)}</h1><p class="tap-guide"><span></span> 未知語をタップ</p><p class="reading-warning" hidden>残り1分です。まもなく問題へ移ります。</p></header><div class="long-copy">${paragraphs}</div></article><footer class="long-reader-action"><button class="primary-button dark" data-finish>読了・問題へ <span>→</span></button></footer></section>`;
   const updateTimer=()=>{const left=Math.max(0,session.readingLimit-(nowSeconds()-session.startedAt));app.querySelector('#timer').textContent=fmtTime(left);app.querySelector('.reading-warning').hidden=left>60;if(left<=0)finishLongReading(true);}; updateTimer(); session.timer=setInterval(updateTimer,250);
   app.querySelectorAll('.word-token').forEach((button)=>button.onclick=()=>toggleUnknown(button)); app.querySelector('[data-finish]').onclick=finishLongReading; app.querySelector('[data-home]').onclick=()=>{clearInterval(session.timer);renderHome();};
 }
