@@ -6,7 +6,8 @@ import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds, validateLongContent, validateQuickSet } from '../lib/assessment.js';
 import { addPassagesToHistory, recentHistoryForPrompt } from '../lib/passage-history.js';
 import { createLongGenerationContext } from '../lib/generation.js';
-import { balanceLongChoices, balanceQuickChoices } from '../lib/choice-shuffle.js';
+import { shuffleLongChoices, shuffleQuickChoices } from '../lib/choice-shuffle.js';
+import { normalizeSummaryGrade } from '../lib/summary-scoring.js';
 import { quickSet } from '../data/fallback.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 
@@ -21,9 +22,9 @@ const nowSeconds = () => performance.now() / 1000;
 function renderHome() {
   activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
   document.body.classList.remove('question-active');
-  document.title = 'Reading Rating ver 1.2';
+  document.title = 'Reading Rating ver 2.0';
   if (store.internalRating === null || store.internalRating === undefined) { renderRatingSetup(); return; }
-  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">VER 1.2</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><h2>Quick</h2><button class="primary-button dark" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><h2>Long</h2><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
+  app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">VER 2.0</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><h2>Quick</h2><button class="primary-button dark" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><h2>Long</h2><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
   app.querySelector('[data-start="long"]').onclick = startLong;
 }
@@ -40,7 +41,7 @@ async function requestContent(endpoint, payload, fallback, validate=(value)=>val
 
 async function startQuick() {
   renderLoading('Quick setを準備中', 'TOEICを意識した実務英文を3つ構成しています。');
-  const passages = balanceQuickChoices(await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet));
+  const passages = shuffleQuickChoices(await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet));
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
   session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'reading', startedAt:nowSeconds(), limit:store.quickTimeLimit };
   renderQuickReading();
@@ -99,7 +100,7 @@ async function startLong() {
   const difficulty=selectDifficulty(store.internalRating); const context=createLongGenerationContext();
   session={mode:'long',...context,difficulty,content:null,phase:'generating'}; renderLoading('Long passageを準備中','新しい文章を生成しています。');
   try {
-    const content=balanceLongChoices(await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)}));
+    const content=shuffleLongChoices(await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)}));
     if(session?.sessionId!==context.sessionId)return;
     store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
     session={...session,content,unknownWords:new Map(),phase:'reading',startedAt:nowSeconds(),readingLimit:longReadingLimitSeconds(content.passage)}; renderLongReading();
@@ -150,10 +151,10 @@ async function submitLong(event) {
   event.preventDefault(); const summary=session.summaryInput.getValue(); if(summary.length<40){app.querySelector('.form-notice').hidden=false;return;}
   const mcCorrect=session.longAnswers.filter((a)=>a.selected===a.answer).length;
   renderLoading('採点中','理解の正確さと要約の質を確認しています。');
-  const fallbackGrade={score:gradeSummaryLocally(summary),goodPoints:'中心的な主張を捉えようとしています。',missingPoints:'主要な対比と因果関係をもう少し明示できます。',improvements:'各段落の役割を整理し、結論につながる論理を一文ずつ残しましょう。',modelAnswer:session.content.sampleSummary};
-  const [grade,unknownWords]=await Promise.all([requestContent('/api/grade-summary',{passage:session.content.passage,summary},fallbackGrade),resolveUnknownWords()]);
-  const summaryScore=Math.max(0,Math.min(10,Math.round(Number(grade.score)||0))); const multipleChoiceScore=mcCorrect*3; const totalScore=multipleChoiceScore+summaryScore; const actual=totalScore/25; const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRatingWithCalibration(oldRating,actual,expected,store.longHistory.length); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime);
-  const record={date:new Date().toISOString(),internalRatingBefore:oldRating,internalRatingAfter:ratingUpdate.newRating,displayRatingBefore:displayRating(oldRating),displayRatingAfter:displayRating(ratingUpdate.newRating),ratingMultiplier:ratingUpdate.multiplier,passageDifficulty:session.difficulty,passageRating:passageRating(session.difficulty),expectedAccuracy:expected,actualAccuracy:actual,totalScore,multipleChoiceScore,summaryScore,readingTime:session.readingTime,WPM:wpm,unknownWords,passage:session.content,questions:session.content.questions,answers:session.longAnswers,summary,goodPoints:grade.goodPoints,missingPoints:grade.missingPoints,improvements:grade.improvements,modelAnswer:grade.modelAnswer||session.content.sampleSummary};
+  const fallbackGrade=createFallbackSummaryGrade(summary,session.content.sampleSummary);
+  const [gradeResponse,unknownWords]=await Promise.all([requestContent('/api/grade-summary',{passage:session.content.passage,summary},fallbackGrade),resolveUnknownWords()]);
+  const grade=normalizeSummaryGrade(gradeResponse); const summaryScore=grade.displayScore; const multipleChoiceScore=mcCorrect*3; const totalScore=multipleChoiceScore+summaryScore; const actual=totalScore/25; const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRatingWithCalibration(oldRating,actual,expected,store.longHistory.length); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime);
+  const record={date:new Date().toISOString(),internalRatingBefore:oldRating,internalRatingAfter:ratingUpdate.newRating,displayRatingBefore:displayRating(oldRating),displayRatingAfter:displayRating(ratingUpdate.newRating),ratingMultiplier:ratingUpdate.multiplier,passageDifficulty:session.difficulty,passageRating:passageRating(session.difficulty),expectedAccuracy:expected,actualAccuracy:actual,totalScore,multipleChoiceScore,summaryScore,summaryElementScore:grade.elementScore,summaryImpressionScore:grade.impressionScore,rawSummaryScore:grade.rawScore,summaryElements:grade.elements,readingTime:session.readingTime,WPM:wpm,unknownWords,passage:session.content,questions:session.content.questions,answers:session.longAnswers,summary,goodPoints:grade.goodPoints,missingPoints:grade.missingPoints,improvements:grade.improvements,feedback:grade.feedback,modelAnswer:grade.modelSummary||session.content.sampleSummary};
   store.internalRating=ratingUpdate.newRating; store.longHistory.unshift(record); saveState(store); renderLongResult(record);
 }
 
@@ -167,7 +168,7 @@ async function resolveUnknownWords() {
   return [...session.unknownWords].map(([word,details])=>({word,...details}));
 }
 
-function gradeSummaryLocally(summary) { const lengthScore=summary.length>=120?4:summary.length>=70?3:summary.length>=40?2:1; const concepts=['公共','空間','設計','多様','安全','評価','予期','意味']; return Math.min(10,lengthScore+Math.min(6,concepts.filter((word)=>summary.includes(word)).length)); }
+function createFallbackSummaryGrade(summary,modelSummary='') { const partial=summary.length>=100?.5:0; return {elements:['主題','背景・目的','主要な結果','重要な因果関係','対比・転換','結論'].map((name)=>({name,score:partial,reason:'自動採点を再取得すると、本文固有の詳細な判定を確認できます。'})),impressionScore:summary.length>=100?2:1,rawScore:0,feedback:'採点サービスへ接続できなかったため、暫定評価です。',goodPoints:'要約を最後まで作成しています。',missingPoints:'本文固有の6要素を再評価する必要があります。',improvements:'通信状況を確認し、次回の採点で主題・因果・結論を統合してください。',modelSummary}; }
 
 function renderLongResult(record) {
   const vocabRows=record.unknownWords.length?record.unknownWords.map(({word,contextMeaning,basicMeaning,partOfSpeech,exampleSentence})=>`<li><b>${escapeHtml(word)}</b><span><em>意味：</em>${escapeHtml(contextMeaning)}<strong class="vocab-example">${escapeHtml(exampleSentence||'例文を取得できませんでした。')}</strong><small>基本義：${escapeHtml(basicMeaning)} · ${escapeHtml(partOfSpeech)}</small></span></li>`).join(''):'<li class="empty-row">今回は記録した単語はありません。</li>';
