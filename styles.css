@@ -2,6 +2,7 @@
 
 :root { --ink:#14231d; --cream:#f5f1e8; --paper:#fffdf8; --lime:#d8f56a; --sage:#b7d7c3; --line:rgba(20,35,29,.16); --muted:#65716c; }
 * { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; text-size-adjust:100%; }
 body { margin:0; min-width:320px; color:var(--ink); background:var(--cream); font-family:"DM Sans","Noto Sans JP",sans-serif; }
 button,a { font:inherit; }
 .app-shell { min-height:100vh; overflow:visible; }
@@ -291,3 +292,60 @@ body.question-active .focus-question { width:100%; height:100dvh; min-height:0; 
 .reset-confirm p { margin:0 0 12px; color:#6f2922; }
 .reset-confirm button { margin-right:8px; padding:9px 12px; }
 @media (max-width:620px) { .rating-setup { justify-content:flex-start; padding:24px 14px; } .rating-options { grid-template-columns:repeat(2,1fr); margin-top:16px; } .rating-options button { min-height:58px; } .rating-options button:last-child { grid-column:1/-1; } .settings-content { grid-template-columns:1fr; } .settings-content > .danger-button { width:100%; } }
+
+.history-row { width:100%; border:0; background:transparent; color:inherit; padding:0; display:grid; gap:4px; text-align:left; cursor:pointer; }
+.history-row span:first-child { color:var(--muted); font-size:12px; }
+.history-row span:last-child { font-size:15px; font-weight:600; line-height:1.45; }
+.history-delete { color:#922f26; }
+.history-detail-page { max-width:1000px; margin:auto; padding:clamp(24px,5vw,64px) clamp(16px,5vw,52px) 72px; }
+.history-detail-page > h1 { margin:8px 0; font-size:clamp(28px,4vw,46px); line-height:1.1; letter-spacing:-.04em; }
+
+@media (max-width:620px) {
+  body { font-size:15px; }
+  h1 { font-size:clamp(1.25rem,5.8vw,1.5rem); line-height:1.18; letter-spacing:-.035em; }
+  .section-title,.loading-view .section-title,.generation-error h1 { font-size:clamp(1.25rem,5.8vw,1.5rem); line-height:1.2; }
+  .eyebrow,.mode-kicker { font-size:12px; }
+  .compact-home .home-heading h1 { font-size:22px; }
+  .compact-mode h2 { font-size:clamp(1.65rem,8vw,2rem); letter-spacing:-.04em; }
+  .question-page,.history-page,.result-page { padding:18px 14px calc(32px + env(safe-area-inset-bottom)); }
+  .question-page > header,.history-page > header { margin-bottom:16px; }
+  .compact-history { padding-top:18px; }
+  .compact-history h1 { margin:5px 0; font-size:22px; }
+  .compact-history header > p:last-child { margin:6px 0 0; font-size:13px; line-height:1.5; }
+  .table-wrap { margin-bottom:18px; overflow-x:hidden; }
+  table { min-width:0; table-layout:fixed; }
+  th,td { padding:11px 10px; }
+  th:last-child,td:last-child { width:58px; padding-left:4px; }
+  .history-row { gap:2px; }
+  .history-row span:first-child { font-size:12px; }
+  .history-row span:last-child { font-size:14px; line-height:1.35; overflow-wrap:anywhere; }
+  .history-detail-page { padding:18px 14px calc(42px + env(safe-area-inset-bottom)); }
+  .history-detail-page > h1 { margin:7px 0; font-size:22px; }
+  .history-detail-page > p { font-size:13px; }
+  .profile-page { gap:10px; }
+  .profile-rating { min-height:126px; }
+  .profile-rating strong { font-size:clamp(4rem,20vw,5.25rem); }
+  .profile-stats article { min-height:72px; padding:10px; }
+  .profile-stats strong { font-size:24px; }
+  .profile-links .primary-button,.settings-panel summary { font-size:14px; }
+  .compact-result .result-hero { padding:6px 0 14px; }
+  .rating-shift { margin:12px 0 4px; gap:14px; font-size:clamp(2.7rem,14vw,3.5rem); }
+  .rating-shift i { font-size:24px; }
+  .result-hero h1 { margin:8px 0 12px; font-size:20px; }
+  .compact-result .result-score { font-size:clamp(4.5rem,22vw,6rem); }
+  .feedback-card,.vocab-card { margin-top:16px; padding:16px; }
+  .feedback-card > p:last-child { font-size:15px; }
+  .vocab-card { gap:14px; }
+  .vocab-card h2 { margin:4px 0 8px; font-size:19px; }
+  .vocab-card li { padding:10px 0; font-size:14px; }
+  .review-card > summary { padding:13px 14px; font-size:14px; }
+  .review-content { padding:0 13px 13px; }
+  .compact-article-header { padding:18px 14px 10px; }
+  .compact-article-header h1 { font-size:clamp(1.25rem,5.8vw,1.45rem); line-height:1.2; }
+  .long-copy,.passage-scroll .passage-text { font-size:16px; line-height:1.65; }
+  .single-question legend { font-size:clamp(1.05rem,4.8vw,1.2rem); }
+  .single-question .choice-list label { font-size:14px; }
+  .summary-prompt h1 { font-size:22px; }
+  .rating-setup h1 { font-size:22px; }
+  .rating-options button { font-size:22px; }
+}

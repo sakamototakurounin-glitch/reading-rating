@@ -10,7 +10,7 @@ import { shuffleLongChoices, shuffleQuickChoices } from '../lib/choice-shuffle.j
 import { normalizeSummaryGrade } from '../lib/summary-scoring.js';
 import { quickSet } from '../data/fallback.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
-import { normalizeUnknownWord, normalizeUnknownWords, historyRecordId } from '../lib/history-format.js';
+import { isJapaneseMeaning, normalizeUnknownWord, normalizeUnknownWords, historyRecordId } from '../lib/history-format.js';
 import { putSession, deleteSession, clearSessions, hydrateHistory } from '../lib/history-db.js';
 
 const app = document.querySelector('#app');
@@ -136,7 +136,7 @@ function renderLongReading() {
 }
 
 function tokenizeParagraph(text) { return text.split(/(\s+)/).map((token)=>{ if (/^\s+$/.test(token)) return token; const word=token.toLowerCase().replace(/^[^a-z]+|[^a-z'-]+$/g,''); return word ? `<button type="button" class="word-token" data-word="${escapeHtml(word)}">${escapeHtml(token)}</button>` : escapeHtml(token); }).join(''); }
-function toggleUnknown(button) { const word=button.dataset.word; if(session.unknownWords.has(word)) session.unknownWords.delete(word); else {const known=session.content.vocabulary?.[word];session.unknownWords.set(word,typeof known==='string'?normalizeUnknownWord({word,generalMeaning:known,exampleSentence:`The report uses ${word} to describe its central finding.`}):normalizeUnknownWord({...known,word,pending:!known})); if(!known)session.unknownWords.get(word).pending=true;} document.querySelectorAll(`[data-word="${CSS.escape(word)}"]`).forEach((el)=>el.classList.toggle('unknown',session.unknownWords.has(word))); }
+function toggleUnknown(button) { const word=button.dataset.word; if(session.unknownWords.has(word)) session.unknownWords.delete(word); else {const known=session.content.vocabulary?.[word];const rawMeaning=typeof known==='string'?known:known?.generalMeaning||known?.basicMeaning||known?.contextMeaning;session.unknownWords.set(word,typeof known==='string'?normalizeUnknownWord({word,generalMeaning:known,exampleSentence:`The report uses ${word} to describe its central finding.`}):normalizeUnknownWord({...known,word,pending:!known||!isJapaneseMeaning(rawMeaning)})); if(!known||!isJapaneseMeaning(rawMeaning))session.unknownWords.get(word).pending=true;} document.querySelectorAll(`[data-word="${CSS.escape(word)}"]`).forEach((el)=>el.classList.toggle('unknown',session.unknownWords.has(word))); }
 function finishLongReading(timedOut=false) { if(session.phase!=='reading')return; clearInterval(session.timer); session.readingTime=Math.min(session.readingLimit,Math.max(1,nowSeconds()-session.startedAt)); session.readingTimedOut=timedOut; session.phase='questions'; session.questionIndex=0; session.longAnswers=[]; renderLongQuestions(); }
 
 function renderLongQuestions() {
@@ -165,7 +165,7 @@ async function submitLong(event) {
 async function resolveUnknownWords() {
   const pending=[...session.unknownWords].filter(([,details])=>details?.pending).map(([word])=>word);
   if(pending.length){
-    const fallback=pending.map((word)=>({word,generalMeaning:`${word}の基本義（辞書情報を再取得してください）`,exampleSentence:`The word ${word} is used naturally in this example.`}));
+    const fallback=pending.map((word)=>({word,generalMeaning:'意味を取得できませんでした',exampleSentence:`The word ${word} is used naturally in this example.`}));
     const entries=await requestContent('/api/lookup-words',{passage:session.content.passage,words:pending},fallback,(value)=>Array.isArray(value)?value:fallback);
     entries.forEach(({word,...details})=>{if(session.unknownWords.has(word.toLowerCase()))session.unknownWords.set(word.toLowerCase(),details);});
   }
@@ -208,7 +208,7 @@ function renderProfile() {
 
 function renderHistory(filter='all') {
   const items=[]; if(filter!=='quick')store.longHistory.forEach((r,i)=>items.push({mode:'long',record:r,index:i})); if(filter!=='long')store.quickHistory.forEach((r,i)=>items.push({mode:'quick',record:r,index:i}));
-  const rows=items.map(({mode,record,index})=>`<tr><td><button class="history-row" data-history-detail="${mode}" data-history-index="${index}"><span>${new Date(record.date).toLocaleDateString('ja-JP')}</span><span>${mode==='long'?`Long · ${record.displayRatingBefore} → ${record.displayRatingAfter} · ${record.totalScore}/25 · ${record.WPM} WPM`:`Quick · ${record.correctAnswers}/9 · ${record.averageWPM} WPM`}</span></button></td><td><button type="button" class="text-button history-delete" data-history-delete="${mode}" data-history-index="${index}">削除</button></td></tr>`).join('')||'<tr><td colspan="2" class="empty-row">履歴はまだありません。</td></tr>';
+  const rows=items.map(({mode,record,index})=>`<tr><td><button class="history-row" data-history-detail="${mode}" data-history-index="${index}"><span>${new Date(record.date).toLocaleDateString('ja-JP')}</span><span>${mode==='long'?`Long · Level ${record.passageDifficulty} · ${record.totalScore}/25 · Rating ${record.displayRatingBefore} → ${record.displayRatingAfter} · ${record.WPM} WPM`:`Quick · ${record.correctAnswers}/9 · ${record.averageWPM} WPM`}</span></button></td><td><button type="button" class="text-button history-delete" data-history-delete="${mode}" data-history-index="${index}">削除</button></td></tr>`).join('')||'<tr><td colspan="2" class="empty-row">履歴はまだありません。</td></tr>';
   app.innerHTML=`<section class="history-page compact-history"><header><p class="eyebrow">${filter.toUpperCase()} HISTORY</p><h1>${filter==='long'?'Long':'Quick'} 履歴</h1><p>行をタップすると、その時点の本文・回答・未知語を確認できます。</p></header><div class="table-wrap"><table><thead><tr><th>Session</th><th></th></tr></thead><tbody>${rows}</tbody></table></div><button class="text-button" data-profile>← プロフィール</button></section>`;
   app.querySelector('[data-profile]').onclick=renderProfile;
   app.querySelectorAll('[data-history-detail]').forEach((button)=>button.onclick=()=>renderHistoryDetail(button.dataset.historyDetail,Number(button.dataset.historyIndex)));
