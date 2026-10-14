@@ -46,8 +46,17 @@ async function startQuick() {
   renderLoading('Quick setを準備中', 'TOEICを意識した実務英文を3つ構成しています。');
   const passages = shuffleQuickChoices(await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet));
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
-  session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'reading', startedAt:nowSeconds(), limit:store.quickTimeLimit };
-  renderQuickReading();
+  session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'ready', limit:store.quickTimeLimit };
+  renderReadingReady();
+}
+
+function renderReadingReady() {
+  session.phase='ready';
+  const currentSession=session;
+  const label=session.mode==='quick'?`QUICK ${session.passageIndex+1} / 3`:'LONG';
+  app.innerHTML=`<section class="reading-ready"><p class="eyebrow">${label}</p><h1>準備ができました</h1><p>開始すると本文が表示され、時間の計測が始まります。</p><button class="primary-button dark" data-begin-reading>開始する <span>→</span></button><button class="text-button" data-home>← ホーム</button></section>`;
+  app.querySelector('[data-begin-reading]').onclick=()=>{if(session!==currentSession||session.phase!=='ready')return;session.phase='reading';session.startedAt=nowSeconds();session.mode==='quick'?renderQuickReading():renderLongReading();};
+  app.querySelector('[data-home]').onclick=()=>{session=null;renderHome();};
 }
 
 function renderQuickReading() {
@@ -66,7 +75,7 @@ function finishQuickReading() {
 function renderQuickQuestions() {
   const item=session.passages[session.passageIndex]; const question=item.questions[session.questionIndex];
   const finalQuestion=session.passageIndex===2&&session.questionIndex===2;
-  renderTimedQuestion({mode:'quick',question,index:session.questionIndex,total:3,duration:QUESTION_LIMITS.quick,label:`QUICK ${session.passageIndex+1}/3`,confirmLabel:finalQuestion?'採点する':'次へ',onRecorded:(answer)=>session.answers.push(answer),onNext:()=>{session.questionIndex+=1;if(session.questionIndex<3)renderQuickQuestions();else{session.passageIndex+=1;session.phase='reading';session.passageIndex<3?renderQuickReading():renderQuickResult();}}});
+  renderTimedQuestion({mode:'quick',question,index:session.questionIndex,total:3,duration:QUESTION_LIMITS.quick,label:`QUICK ${session.passageIndex+1}/3`,confirmLabel:finalQuestion?'採点する':'次へ',onRecorded:(answer)=>session.answers.push(answer),onNext:()=>{session.questionIndex+=1;if(session.questionIndex<3)renderQuickQuestions();else{session.passageIndex+=1;session.passageIndex<3?renderReadingReady():renderQuickResult();}}});
 }
 
 function renderTimedQuestion({mode,question,index,total,duration,label,confirmLabel='次へ',onRecorded,onNext}) {
@@ -107,7 +116,7 @@ async function startLong() {
     const content=shuffleLongChoices(await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)}));
     if(session?.sessionId!==context.sessionId)return;
     store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
-    session={...session,content,unknownWords:new Map(),phase:'reading',startedAt:nowSeconds(),readingLimit:longReadingLimitSeconds(content.passage)}; renderLongReading();
+    session={...session,content,unknownWords:new Map(),phase:'ready',readingLimit:longReadingLimitSeconds(content.passage)}; renderReadingReady();
   } catch {
     if(session?.sessionId===context.sessionId)renderLongGenerationError();
   }
