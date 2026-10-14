@@ -5,10 +5,9 @@ import { selectDifficulty } from '../lib/difficulty.js';
 import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds, validateLongContent, validateQuickSet } from '../lib/assessment.js';
 import { addPassagesToHistory, recentHistoryForPrompt } from '../lib/passage-history.js';
-import { createLongGenerationContext } from '../lib/generation.js';
+import { createLongGenerationContext, createQuickGenerationContext } from '../lib/generation.js';
 import { shuffleLongChoices, shuffleQuickChoices } from '../lib/choice-shuffle.js';
 import { normalizeSummaryGrade } from '../lib/summary-scoring.js';
-import { quickSet } from '../data/fallback.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 import { isJapaneseMeaning, normalizeUnknownWord, normalizeUnknownWords, historyRecordId } from '../lib/history-format.js';
 import { putSession, deleteSession, clearSessions, hydrateHistory } from '../lib/history-db.js';
@@ -43,11 +42,24 @@ async function requestContent(endpoint, payload, fallback, validate=(value)=>val
 }
 
 async function startQuick() {
+  activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{}; document.body.classList.remove('question-active');
+  const context=createQuickGenerationContext(); session={mode:'quick',...context,phase:'generating',passages:null};
   renderLoading('Quick setを準備中', 'TOEICを意識した実務英文を3つ構成しています。');
-  const passages = shuffleQuickChoices(await requestContent('/api/generate-quick', {recentPassages:recentHistoryForPrompt(store.passageHistory)}, quickSet, validateQuickSet));
+  try {
+  const response=await fetch(`/api/generate-quick?generationId=${encodeURIComponent(context.generationId)}`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify({...context,recentPassages:recentHistoryForPrompt(store.passageHistory)})});
+  if(!response.ok)throw new Error('Quick generation failed');
+  const passages=shuffleQuickChoices(validateQuickSet(await response.json()));
+  if(session?.sessionId!==context.sessionId)return;
+  if(passages.some((item)=>item.generationId!==context.generationId||item.sessionId!==context.sessionId))throw new Error('Generation identity mismatch');
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
-  session = { mode:'quick', passages, passageIndex:0, answers:[], readingTimes:[], phase:'ready', limit:store.quickTimeLimit };
+  session = { mode:'quick', ...context, passages, passageIndex:0, answers:[], readingTimes:[], phase:'ready', limit:store.quickTimeLimit };
   renderReadingReady();
+  } catch {
+    if(session?.sessionId!==context.sessionId)return;
+    session=null;
+    app.innerHTML=`<section class="generation-error" role="alert"><p class="eyebrow">GENERATION ERROR</p><h1>文章の生成に失敗しました。</h1><p>通信状況を確認して、再試行してください。</p><div><button class="primary-button dark" data-retry-quick>再試行する ↻</button><button class="text-button" data-home>ホームへ戻る</button></div></section>`;
+    app.querySelector('[data-retry-quick]').onclick=startQuick; app.querySelector('[data-home]').onclick=renderHome;
+  }
 }
 
 function renderReadingReady() {

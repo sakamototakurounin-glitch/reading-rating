@@ -16,14 +16,28 @@ export default async function handler(request,response) {
   if (request.method !== 'POST') return jsonResponse(response,405,{error:'Method not allowed'});
   try {
     const input=parseRequest(request); const recent=recentHistoryForPrompt(Array.isArray(input.recentPassages)?input.recentPassages:[]); const historyText=JSON.stringify(recent).slice(0,14000);
+    const sessionId=String(input.sessionId||''); const generationId=String(input.generationId||'');
+    if(!sessionId||!generationId)return jsonResponse(response,400,{error:'sessionId and generationId are required'});
     const create=async(slot,extra='')=>structuredCompletion({
-      system:`You design high-quality TOEIC-oriented English speed-reading practice. Return only valid structured data. Every answer must be uniquely supported by its document. Use practical workplace and business English, realistic details, paraphrase, scheduling, purpose, inference, and information processing—not rare academic vocabulary. Prefer high-frequency B1 vocabulary and easier B2 words, lowering lexical demand approximately two Reading Rating levels from the previous B1–B2 target. ${choiceSimilarityPrompt()}`,
+      system:`You design high-quality TOEIC-oriented English speed-reading practice. This is a fresh generation request ${generationId}. Return only valid structured data. Every answer must be uniquely supported by its document. Use practical workplace and business English, realistic details, paraphrase, scheduling, purpose, inference, and information processing—not rare academic vocabulary. Prefer high-frequency B1 vocabulary and easier B2 words, lowering lexical demand approximately two Reading Rating levels from the previous B1–B2 target. ${choiceSimilarityPrompt()}`,
       user:`Create one TOEIC-style English reading document of 190–220 words for slot ${slot+1} of a three-document set. Choose its context from ${categoryGroups[slot]}. Vary the document form among an internal email, memo, notice, announcement, business letter, customer message, web page, short report, schedule update, or workplace article. Make it a realistic fictional situation with specific dates, conditions, responsibilities, changes, exceptions, costs, deadlines, or unexpected outcomes; mark the entity internally with settingType="fictional" and fictionalEntityName. Do not imitate or name an actual TOEIC question. Avoid academic essays and generic “benefits and risks” discussion. Compare it with history by domain, document/case type, organizationUsed, keyMechanism, outcome, argumentPattern, keywords, and examples. RECENT PASSAGES: ${historyText}. Use practical CEFR B1–B2 vocabulary commonly encountered in TOEIC preparation. Draft questions and ask: “Could a reasonably educated person answer this correctly without reading the document?” Reject any question if yes. Return exactly 3 questions covering purpose or main point, a passage-specific detail or condition, and inference/paraphrase. Do not ask merely for a company name. Set every audit truthfully: commonKnowledgeAnswerable=false, passageSpecificEvidence=true, specialistKnowledgeRequired=false, properNounRecall=false. Each question must have exactly 4 plausible, balanced options; only document details may distinguish the answer. Each option should normally be 12–28 words with similar length and style. explanation must state why the answer follows and why each distractor fails. evidence must include enough wording from the document for code-side verification. Provide all requested case metadata plus a natural complete Japanese translation. ${extra}`,
       schema:passage,
     });
-    const passages=await Promise.all([0,1,2].map((slot)=>create(slot))); const accepted=[...recent]; const retry=[];
-    passages.forEach((item,index)=>{let invalid=false;try{if(!item.translation)throw new Error();assertFourChoiceQuestions(item.questions,3,'quick',item.passage);}catch{invalid=true;}const record=passageRecord(item,'quick');if(invalid||isTooSimilar(record,accepted))retry.push(index);else accepted.push(record);});
-    await Promise.all(retry.map(async(index)=>{passages[index]=await create(index,'The first draft failed novelty or passage-dependency checks. Change its case structure, mechanism, outcome, and examples; replace any common-knowledge or proper-name recall question.');}));
+    const passages=await Promise.all([0,1,2].map((slot)=>create(slot))); const accepted=[...recent];
+    for(let index=0;index<passages.length;index+=1){
+      for(let attempt=0;attempt<3;attempt+=1){
+        try {
+          const item=passages[index]; if(!item.translation||!item.passage)throw new Error('Missing passage or translation');
+          assertFourChoiceQuestions(item.questions,3,'quick',item.passage);
+          const record=passageRecord(item,'quick'); if(isTooSimilar(record,accepted))throw new Error('Passage is too similar to recent or current set');
+          accepted.push(record); break;
+        } catch(error){
+          if(attempt===2)throw error;
+          passages[index]=await create(index,`Rejected: ${error.message}. Use a different document structure, mechanism, outcome, organization and examples. Avoid these accepted cases: ${JSON.stringify(accepted).slice(0,14000)}. Recheck passage-specific evidence and all four choices.`);
+        }
+      }
+      passages[index].sessionId=sessionId; passages[index].generationId=generationId;
+    }
     jsonResponse(response,200,passages);
   } catch (error) { jsonResponse(response,503,{error:error.message}); }
 }
