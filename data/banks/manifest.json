@@ -1,0 +1,24 @@
+{
+  "version": "bank-v1",
+  "quickPassages": 167,
+  "quickQuestions": 501,
+  "longPassages": 240,
+  "longQuestions": 1200,
+  "levels": [
+    10,
+    10,
+    10,
+    20,
+    50,
+    50,
+    50,
+    20,
+    10,
+    10
+  ],
+  "sourceSha256": {
+    "quickJson": "36030e04c5b841c0b2ed82399428aa83e0cbf0f29f8b6de57bec990eb61d49c0",
+    "longJson": "5ff7290352f7a03af360d567c02a31cc1a88e288e62d14c7317381f51a10ef9a"
+  },
+  "contentRewritten": false
+}

@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { shuffleLongChoices, shuffleQuickChoices } from '../lib/choice-shuffle.js';
-import { longPassage, quickSet } from '../data/fallback.js';
+import { readFile } from 'node:fs/promises';
+import { adaptQuick, adaptLong } from '../lib/question-bank.js';
+const quickSet=JSON.parse(await readFile(new URL('../data/banks/quick.json',import.meta.url))).passages.slice(0,3).map(p=>adaptQuick(p));
+const longPassage=adaptLong(JSON.parse(await readFile(new URL('../data/banks/long/level-0.json',import.meta.url))).items[0]);
 
 function seededRandom(seed) {
   let state=seed>>>0;

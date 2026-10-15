@@ -1,12 +1,11 @@
 import { defaultState, loadState, resetState, saveState } from '../lib/storage.js';
 import { displayRating, expectedAccuracy, passageRating, updateRatingWithCalibration } from '../lib/rating.js';
 import { RATING } from '../lib/config.js';
-import { selectDifficulty } from '../lib/difficulty.js';
-import { calculateWpm, nextTimeLimit } from '../lib/quick.js';
-import { QUESTION_LIMITS, longReadingLimitSeconds, validateLongContent, validateQuickSet } from '../lib/assessment.js';
-import { addPassagesToHistory, recentHistoryForPrompt } from '../lib/passage-history.js';
+import { calculateWpm, nextRecentTimeLimit } from '../lib/quick.js';
+import { QUESTION_LIMITS, longReadingLimitSeconds } from '../lib/assessment.js';
+import { addPassagesToHistory } from '../lib/passage-history.js';
 import { createLongGenerationContext, createQuickGenerationContext } from '../lib/generation.js';
-import { shuffleLongChoices, shuffleQuickChoices } from '../lib/choice-shuffle.js';
+import { loadBank, chooseLongLevel, takeBankItems, adaptQuick, adaptLong, isCorrectAnswer } from '../lib/question-bank.js';
 import { normalizeSummaryGrade } from '../lib/summary-scoring.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 import { isJapaneseMeaning, normalizeUnknownWord, normalizeUnknownWords, historyRecordId } from '../lib/history-format.js';
@@ -31,6 +30,7 @@ function renderHome() {
   app.innerHTML = `<section class="compact-home"><div class="home-heading"><p class="eyebrow">VER 2.1</p><h1>Choose a mode</h1></div><div class="compact-mode-grid" aria-label="トレーニングモード"><article class="compact-mode quick-mode"><h2>Quick</h2><button class="primary-button dark" data-start="quick">始める <span>→</span></button></article><article class="compact-mode long-mode"><h2>Long</h2><button class="primary-button dark" data-start="long">始める <span>→</span></button></article></div></section>`;
   app.querySelector('[data-start="quick"]').onclick = startQuick;
   app.querySelector('[data-start="long"]').onclick = startLong;
+  if(store.pendingLong){app.insertAdjacentHTML('beforeend','<section class="review-card"><p>採点保留の要約があります。Ratingは未更新です。</p><button class="primary-button" data-resume-grade>採点を再開する</button></section>');app.querySelector('[data-resume-grade]').onclick=resumePendingLong;}
 }
 
 function renderRatingSetup() {
@@ -46,20 +46,20 @@ async function requestContent(endpoint, payload, fallback, validate=(value)=>val
 async function startQuick() {
   activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{}; document.body.classList.remove('question-active');
   const context=createQuickGenerationContext(); session={mode:'quick',...context,phase:'generating',passages:null};
-  renderLoading('Quick setを準備中', 'TOEICを意識した実務英文を3つ構成しています。');
+  renderLoading('Quick setを準備中', '問題バンクから3つの本文を読み込んでいます。');
   try {
-  const response=await fetch(`/api/generate-quick?generationId=${encodeURIComponent(context.generationId)}`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify({...context,recentPassages:recentHistoryForPrompt(store.passageHistory)})});
-  if(!response.ok)throw new Error('Quick generation failed');
-  const passages=shuffleQuickChoices(validateQuickSet(await response.json()));
+  const bank=await loadBank('quick');
   if(session?.sessionId!==context.sessionId)return;
-  if(passages.some((item)=>item.generationId!==context.generationId||item.sessionId!==context.sessionId))throw new Error('Generation identity mismatch');
+  const selection=takeBankItems(bank,store.bankProgress?.quick,3);
+  const passages=selection.items.map(p=>adaptQuick(p));
+  store.bankProgress={...store.bankProgress,quick:selection.progress};
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
   session = { mode:'quick', ...context, passages, passageIndex:0, answers:[], readingTimes:[], phase:'ready', limit:store.quickTimeLimit };
   renderReadingReady();
   } catch {
     if(session?.sessionId!==context.sessionId)return;
     session=null;
-    app.innerHTML=`<section class="generation-error" role="alert"><p class="eyebrow">GENERATION ERROR</p><h1>文章の生成に失敗しました。</h1><p>通信状況を確認して、再試行してください。</p><div><button class="primary-button dark" data-retry-quick>再試行する ↻</button><button class="text-button" data-home>ホームへ戻る</button></div></section>`;
+    app.innerHTML=`<section class="generation-error" role="alert"><p class="eyebrow">BANK LOAD ERROR</p><h1>問題の読み込みに失敗しました。</h1><p>通信状況を確認して、再試行してください。</p><div><button class="primary-button dark" data-retry-quick>再試行する ↻</button><button class="text-button" data-home>ホームへ戻る</button></div></section>`;
     app.querySelector('[data-retry-quick]').onclick=startQuick; app.querySelector('[data-home]').onclick=renderHome;
   }
 }
@@ -103,7 +103,7 @@ function renderTimedQuestion({mode,question,index,total,duration,label,confirmLa
   requestAnimationFrame(()=>requestAnimationFrame(()=>{if(settled)return;startTimestamp=Date.now();deadlineTimestamp=startTimestamp+duration*1000;remainingTime=duration*1000;timerElement.textContent=fmtTime(duration);timerId=setInterval(tick,200);tick();}));
   function settle(selected,timedOut=false) {
     if(settled)return; settled=true; cancelTimer(); activeQuestionTimerCancel=()=>{}; if(timedOut)timerElement.textContent='0:00';
-    document.body.classList.remove('question-active'); onRecorded({selected,answer:question.answer,timedOut}); onNext();
+    document.body.classList.remove('question-active'); onRecorded({selected,answer:question.answer,selectedId:selected===null?null:question.choiceIds?.[selected],answerId:question.correctChoiceId,timedOut}); onNext();
   }
   const confirm=app.querySelector('[data-confirm]');
   form.querySelectorAll(`input[name="${inputName}"]`).forEach((input)=>input.addEventListener('change',()=>{selectedIndex=Number(input.value);confirm.disabled=false;}));
@@ -113,9 +113,9 @@ function renderTimedQuestion({mode,question,index,total,duration,label,confirmLa
 function translationHtml(translation='') { return String(translation).split(/\n\s*\n/).map((paragraph)=>`<p>${escapeHtml(paragraph)}</p>`).join(''); }
 
 function renderQuickResult() {
-  const correct = session.answers.filter((a) => a.selected === a.answer).length;
-  const averageWPM = Math.round(session.passages.reduce((sum,p,i) => sum + calculateWpm(p.passage.trim().split(/\s+/).length, session.readingTimes[i]), 0) / 3);
-  const nextLimit = nextTimeLimit(session.limit, correct);
+  const correct = session.answers.filter(isCorrectAnswer).length;
+  const averageWPM = Math.round(session.passages.reduce((sum,p,i) => sum + calculateWpm(p.wordCount||p.passage.trim().split(/\s+/).length, session.readingTimes[i]), 0) / 3);
+  const nextLimit = nextRecentTimeLimit(session.limit, correct, store.quickHistory);
   const record = { id:`quick-${Date.now()}-${Math.random().toString(36).slice(2)}`, date:new Date().toISOString(), passages:session.passages, answers:session.answers, questions:session.passages.flatMap((p)=>p.questions), correctAnswers:correct, totalQuestions:9, accuracy:correct/9, readingTimes:session.readingTimes, averageWPM, currentTimeLimit:session.limit, nextTimeLimit:nextLimit, unknownWords:[] };
   store.quickHistory.unshift(record); store.quickTimeLimit=nextLimit; saveState(store);
   void putSession('quick', record);
@@ -123,12 +123,17 @@ function renderQuickResult() {
 }
 
 async function startLong() {
+  if(store.pendingLong&&!window.confirm('採点保留の要約を破棄して、新しくLongを始めますか？')){resumePendingLong();return;}
+  if(store.pendingLong){delete store.pendingLong;saveState(store);}
   activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{}; document.body.classList.remove('question-active'); session=null;
-  const difficulty=selectDifficulty(store.internalRating); const context=createLongGenerationContext();
-  session={mode:'long',...context,difficulty,content:null,phase:'generating'}; renderLoading('Long passageを準備中','新しい文章を生成しています。');
+  const difficulty=chooseLongLevel(store.internalRating); const context=createLongGenerationContext();
+  session={mode:'long',...context,difficulty,content:null,phase:'loading'}; renderLoading('Long passageを準備中','問題バンクから文章を読み込んでいます。');
   try {
-    const content=shuffleLongChoices(await requestFreshLong({...context,difficulty,recentPassages:recentHistoryForPrompt(store.passageHistory)}));
+    const bank=await loadBank('long',difficulty);
     if(session?.sessionId!==context.sessionId)return;
+    const selection=takeBankItems(bank,store.bankProgress?.long?.[difficulty],1);
+    const content=adaptLong(selection.items[0]);
+    store.bankProgress={...store.bankProgress,long:{...store.bankProgress?.long,[difficulty]:selection.progress}};
     store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
     session={...session,content,unknownWords:new Map(),phase:'ready',readingLimit:longReadingLimitSeconds(content.passage)}; renderReadingReady();
   } catch {
@@ -136,17 +141,9 @@ async function startLong() {
   }
 }
 
-async function requestFreshLong(payload) {
-  const response=await fetch(`/api/generate-long?generationId=${encodeURIComponent(payload.generationId)}`,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','X-Generation-ID':payload.generationId},body:JSON.stringify(payload)});
-  if(!response.ok)throw new Error('Long generation failed');
-  const content=validateLongContent(await response.json());
-  if(content.generationId!==payload.generationId||content.sessionId!==payload.sessionId)throw new Error('Generation identity mismatch');
-  return content;
-}
-
 function renderLongGenerationError() {
   session=null;
-  app.innerHTML=`<section class="generation-error" role="alert"><p class="eyebrow">GENERATION ERROR</p><h1>文章の生成に失敗しました。</h1><p>通信状況を確認して、もう一度お試しください。</p><div><button class="primary-button dark" data-retry-long>再試行する <span>↻</span></button><button class="text-button" data-home>ホームへ戻る</button></div></section>`;
+  app.innerHTML=`<section class="generation-error" role="alert"><p class="eyebrow">BANK LOAD ERROR</p><h1>問題の読み込みに失敗しました。</h1><p>通信状況を確認して、もう一度お試しください。</p><div><button class="primary-button dark" data-retry-long>再試行する <span>↻</span></button><button class="text-button" data-home>ホームへ戻る</button></div></section>`;
   app.querySelector('[data-retry-long]').onclick=startLong; app.querySelector('[data-home]').onclick=renderHome;
 }
 
@@ -169,33 +166,61 @@ function renderLongQuestions() {
 }
 
 function renderLongSummary() {
+  session.phase='summary';
   app.innerHTML=`<section class="summary-page"><div class="step-line"><span>LONG · 日本語要約</span><span>10 points</span></div><div class="summary-prompt"><h1>日本語要約</h1><p>中心的な主張と重要な論点をまとめてください。</p></div><form>${answerInputHtml()}<p class="form-notice" hidden>40文字以上入力してください。</p><div class="sticky-action"><button class="primary-button dark" type="submit">採点する <span>→</span></button></div></form></section>`;
   session.summaryInput=mountAnswerInput(app);
   app.querySelector('form').onsubmit=submitLong;
 }
 
 async function submitLong(event) {
-  event.preventDefault(); const summary=session.summaryInput.getValue(); if(summary.length<40){app.querySelector('.form-notice').hidden=false;return;}
-  const mcCorrect=session.longAnswers.filter((a)=>a.selected===a.answer).length;
+  event.preventDefault(); const current=session;
+  if(!current||current.submitting||current.committed)return;
+  const summary=current.phase==='summary'?current.summaryInput.getValue():current.summaryDraft;
+  if(!summary||summary.length<40){app.querySelector('.form-notice').hidden=false;return;}
+  current.summaryDraft=summary; current.submitting=true; current.phase='grading';
+  try {
+  store.pendingLong={sessionId:current.sessionId,generationId:current.generationId,mode:'long',content:current.content,difficulty:current.difficulty,longAnswers:current.longAnswers,readingTime:current.readingTime,readingLimit:current.readingLimit,summaryDraft:summary,unknownWords:[...current.unknownWords],phase:'grading-pending'};
+  saveState(store);
+  const mcCorrect=current.longAnswers.filter(isCorrectAnswer).length;
   renderLoading('採点中','理解の正確さと要約の質を確認しています。');
-  const fallbackGrade=createFallbackSummaryGrade(summary,session.content.sampleSummary);
-  const [gradeResponse,unknownWords]=await Promise.all([requestContent('/api/grade-summary',{passage:session.content.passage,summary},fallbackGrade),resolveUnknownWords()]);
+  const response=await fetch('/api/grade-summary',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passage:current.content.passage,summary,sessionId:current.sessionId})});
+  if(!response.ok)throw new Error('Summary grading unavailable');
+  const gradeResponse=await response.json();
+  normalizeSummaryGrade(gradeResponse);
+  if(session!==current)return;
+  const unknownWords=await resolveUnknownWords(current);
+  if(session!==current)return;
+  const prior=store.longHistory.find(r=>r.id===current.sessionId);if(prior){current.committed=true;renderLongResult(prior);return;}
   const grade=normalizeSummaryGrade(gradeResponse); const summaryScore=grade.displayScore; const multipleChoiceScore=mcCorrect*3; const totalScore=multipleChoiceScore+summaryScore; const actual=totalScore/25; const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRatingWithCalibration(oldRating,actual,expected,store.longHistory.length); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime);
-  const record={id:`long-${Date.now()}-${Math.random().toString(36).slice(2)}`,date:new Date().toISOString(),title:session.content.title,originalPassage:session.content.passage,japaneseTranslation:session.content.translation,internalRatingBefore:oldRating,internalRatingAfter:ratingUpdate.newRating,displayRatingBefore:displayRating(oldRating),displayRatingAfter:displayRating(ratingUpdate.newRating),ratingMultiplier:ratingUpdate.multiplier,passageDifficulty:session.difficulty,passageRating:passageRating(session.difficulty),expectedAccuracy:expected,actualAccuracy:actual,totalScore,multipleChoiceScore,summaryScore,summaryDisplayScore:summaryScore,summaryElementScore:grade.elementScore,summaryImpressionScore:grade.impressionScore,rawSummaryScore:grade.rawScore,summaryElements:grade.elements,readingTime:session.readingTime,WPM:wpm,unknownWords:normalizeUnknownWords(unknownWords),passage:session.content,questions:session.content.questions,answers:session.longAnswers,summary,goodPoints:grade.goodPoints,missingPoints:grade.missingPoints,improvements:grade.improvements,feedback:grade.feedback,modelAnswer:grade.modelSummary||session.content.sampleSummary,sampleSummary:session.content.sampleSummary};
-  store.internalRating=ratingUpdate.newRating; store.longHistory.unshift(record); saveState(store); void putSession('long', record); renderLongResult(record);
+  const record={id:current.sessionId,date:new Date().toISOString(),title:session.content.title,originalPassage:session.content.passage,japaneseTranslation:session.content.translation,internalRatingBefore:oldRating,internalRatingAfter:ratingUpdate.newRating,displayRatingBefore:displayRating(oldRating),displayRatingAfter:displayRating(ratingUpdate.newRating),ratingMultiplier:ratingUpdate.multiplier,passageDifficulty:session.difficulty,passageRating:passageRating(session.difficulty),expectedAccuracy:expected,actualAccuracy:actual,totalScore,multipleChoiceScore,summaryScore,summaryDisplayScore:summaryScore,summaryElementScore:grade.elementScore,summaryImpressionScore:grade.impressionScore,rawSummaryScore:grade.rawScore,summaryElements:grade.elements,readingTime:session.readingTime,WPM:wpm,unknownWords:normalizeUnknownWords(unknownWords),passage:session.content,questions:session.content.questions,answers:session.longAnswers,summary,goodPoints:grade.goodPoints,missingPoints:grade.missingPoints,improvements:grade.improvements,feedback:grade.feedback,modelAnswer:grade.modelSummary||session.content.sampleSummary,sampleSummary:session.content.sampleSummary};
+  const nextStore={...store,internalRating:ratingUpdate.newRating,longHistory:[record,...store.longHistory]};delete nextStore.pendingLong;
+  saveState(nextStore);store=nextStore;current.committed=true;void putSession('long', record);renderLongResult(record);
+  } catch {
+    if(session===current){current.submitting=false;current.phase='grading-pending';renderGradingPending();}
+  }
 }
 
-async function resolveUnknownWords() {
-  const pending=[...session.unknownWords].filter(([,details])=>details?.pending).map(([word])=>word);
+function resumePendingLong() {
+  if(!store.pendingLong)return;
+  session={...store.pendingLong,unknownWords:new Map(store.pendingLong.unknownWords),submitting:false};renderGradingPending();
+}
+
+function renderGradingPending() {
+  app.innerHTML='<section class="generation-error" role="alert"><h1>要約の採点は保留中です</h1><p>Rating・履歴はまだ更新していません。通信状況を確認して再試行してください。</p><button class="primary-button dark" data-retry-grade>採点を再試行する</button><button class="text-button" data-edit-summary>要約を修正する</button><button class="text-button" data-home>ホームへ戻る</button></section>';
+  app.querySelector('[data-retry-grade]').onclick=submitLong;
+  app.querySelector('[data-edit-summary]').onclick=()=>{const draft=session.summaryDraft;renderLongSummary();session.summaryInput.setValue(draft);};
+  app.querySelector('[data-home]').onclick=renderHome;
+}
+
+async function resolveUnknownWords(current=session) {
+  const pending=[...current.unknownWords].filter(([,details])=>details?.pending).map(([word])=>word);
   if(pending.length){
     const fallback=pending.map((word)=>({word,generalMeaning:'意味を取得できませんでした',exampleSentence:`The word ${word} is used naturally in this example.`}));
-    const entries=await requestContent('/api/lookup-words',{passage:session.content.passage,words:pending},fallback,(value)=>Array.isArray(value)?value:fallback);
-    entries.forEach(({word,...details})=>{if(session.unknownWords.has(word.toLowerCase()))session.unknownWords.set(word.toLowerCase(),details);});
+    const entries=await requestContent('/api/lookup-words',{passage:current.content.passage,words:pending},fallback,(value)=>Array.isArray(value)?value:fallback);
+    entries.forEach(({word,...details})=>{if(current.unknownWords.has(word.toLowerCase()))current.unknownWords.set(word.toLowerCase(),details);});
   }
-  return normalizeUnknownWords([...session.unknownWords].map(([word,details])=>({word,...details})));
+  return normalizeUnknownWords([...current.unknownWords].map(([word,details])=>({word,...details})));
 }
-
-function createFallbackSummaryGrade(summary,modelSummary='') { const partial=summary.length>=100?.5:0; return {elements:['主題','背景・目的','主要な結果','重要な因果関係','対比・転換','結論'].map((name)=>({name,score:partial,reason:'自動採点を再取得すると、本文固有の詳細な判定を確認できます。'})),impressionScore:summary.length>=100?2:1,rawScore:0,feedback:'採点サービスへ接続できなかったため、暫定評価です。',goodPoints:'要約を最後まで作成しています。',missingPoints:'本文固有の6要素を再評価する必要があります。',improvements:'通信状況を確認し、次回の採点で主題・因果・結論を統合してください。',modelSummary}; }
 
 function renderLongResult(record) {
   const vocabRows=record.unknownWords.length?record.unknownWords.map(({word,generalMeaning,exampleSentence})=>`<li><b>${escapeHtml(word)}</b><span><em>基本義：</em>${escapeHtml(generalMeaning)}<strong class="vocab-example">${escapeHtml(exampleSentence||'例文を取得できませんでした。')}</strong></span></li>`).join(''):'<li class="empty-row">今回は記録した単語はありません。</li>';
@@ -226,7 +251,7 @@ function renderProfile() {
   app.innerHTML=`<section class="profile-page"><div class="profile-rating"><p>Reading Rating</p><strong>${displayRating(store.internalRating)}</strong>${long.length<RATING.calibrationSessions?`<small>初回調整 ${long.length}/${RATING.calibrationSessions}</small>`:''}</div><div class="profile-stats"><article><span>Long</span><strong>${long.length}</strong><small>sessions</small></article><article><span>Recent WPM</span><strong>${recentWpm}</strong><small>Quick</small></article><article><span>Best WPM</span><strong>${bestWpm||'—'}</strong><small>Avg ${averageWpm||'—'}</small></article><article><span>Total</span><strong>${long.length+quick.length}</strong><small>sessions</small></article></div><div class="profile-links"><button class="primary-button" data-history="long">Long 履歴 <span>→</span></button><button class="primary-button" data-history="quick">Quick 履歴 <span>→</span></button></div><details class="settings-panel"><summary>設定</summary><div class="settings-content"><div><strong>最初から始める</strong><p>履歴とRatingを削除し、初期Ratingの選択に戻ります。</p></div><button type="button" class="danger-button" data-reset>最初から</button><div class="reset-confirm" hidden><p>すべての学習データを削除します。元に戻せません。</p><button type="button" data-cancel-reset>キャンセル</button><button type="button" class="danger-button" data-confirm-reset>削除して最初から</button></div></div></details><button class="text-button profile-home" data-home>← ホーム</button></section>`;
   app.querySelectorAll('[data-history]').forEach((button)=>button.onclick=()=>renderHistory(button.dataset.history)); app.querySelector('[data-home]').onclick=renderHome;
   const confirm=app.querySelector('.reset-confirm'); app.querySelector('[data-reset]').onclick=()=>{confirm.hidden=false;}; app.querySelector('[data-cancel-reset]').onclick=()=>{confirm.hidden=true;}; app.querySelector('[data-confirm-reset]').onclick=()=>{resetState(); void clearSessions(); localStorage.removeItem('reading-rating-input-mode');store={...defaultState,longHistory:[],quickHistory:[]};renderRatingSetup();};
-  if(!historyHydrated){ historyHydrated=true; void hydrateHistory(store).then((next)=>{ if(next.longHistory!==store.longHistory||next.quickHistory!==store.quickHistory){store=next;saveState(store);renderProfile();} }); }
+  if(!historyHydrated){ historyHydrated=true; void hydrateHistory(store).then((next)=>{ if(next.longHistory!==store.longHistory||next.quickHistory!==store.quickHistory){store={...store,longHistory:next.longHistory,quickHistory:next.quickHistory};saveState(store);if(app.querySelector('.profile-page'))renderProfile();} }); }
 }
 
 function renderHistory(filter='all') {
@@ -247,4 +272,4 @@ function renderHistoryDetail(mode,index) {
   app.querySelector('[data-copy-history]')?.addEventListener('click',async(event)=>{await navigator.clipboard.writeText(unknown.map((v)=>`${v.word}\t${v.generalMeaning}\t${v.exampleSentence||''}`).join('\n'));event.currentTarget.textContent='コピーしました ✓';});
 }
 
-document.querySelector('.profile-button').onclick=()=>renderProfile(); document.querySelector('.brand').onclick=(event)=>{event.preventDefault();renderHome();}; renderHome();
+document.querySelector('.profile-button').onclick=()=>{if(session?.timer)clearInterval(session.timer);session=null;document.body.classList.remove('question-active');renderProfile();}; document.querySelector('.brand').onclick=(event)=>{event.preventDefault();renderHome();}; renderHome();

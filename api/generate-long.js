@@ -1,40 +1,5 @@
-import { jsonResponse, parseRequest, structuredCompletion } from './_openai.js';
-import { buildDifficultyProfile, difficultyPrompt } from '../lib/difficulty-profile.js';
-import { isTooSimilar, passageRecord, recentHistoryForPrompt } from '../lib/passage-history.js';
-import { validateLongContent } from '../lib/assessment.js';
+import { jsonResponse } from './_openai.js';
 
-const audit={type:'object',additionalProperties:false,required:['commonKnowledgeAnswerable','passageSpecificEvidence','specialistKnowledgeRequired','properNounRecall'],properties:{commonKnowledgeAnswerable:{type:'boolean'},passageSpecificEvidence:{type:'boolean'},specialistKnowledgeRequired:{type:'boolean'},properNounRecall:{type:'boolean'}}};
-const schema = { type:'object', additionalProperties:false, required:['id','title','topic','category','caseType','settingType','fictionalEntityName','organizationUsed','keyMechanism','outcome','argumentPattern','shortSummary','centralThesis','keywords','mainExamples','passage','translation','sampleSummary','questions','vocabulary'], properties:{
-  id:{type:'string'}, title:{type:'string'}, topic:{type:'string'}, category:{type:'string'}, caseType:{type:'string'}, settingType:{type:'string',enum:['fictional','real']}, fictionalEntityName:{type:'string'}, organizationUsed:{type:'string'}, keyMechanism:{type:'string'}, outcome:{type:'string'}, argumentPattern:{type:'string'}, shortSummary:{type:'string'}, centralThesis:{type:'string'}, keywords:{type:'array',minItems:4,maxItems:10,items:{type:'string'}}, mainExamples:{type:'array',minItems:2,maxItems:6,items:{type:'string'}}, passage:{type:'string'}, translation:{type:'string'}, sampleSummary:{type:'string'},
-  questions:{type:'array',minItems:5,maxItems:5,items:{type:'object',additionalProperties:false,required:['prompt','choices','answer','explanation','evidence','audit'],properties:{prompt:{type:'string'},choices:{type:'array',minItems:4,maxItems:4,items:{type:'string'}},answer:{type:'integer',minimum:0,maximum:3},explanation:{type:'string'},evidence:{type:'string'},audit}}},
-  vocabulary:{type:'array',minItems:12,maxItems:20,items:{type:'object',additionalProperties:false,required:['word','contextMeaning','generalMeaning','partOfSpeech','exampleSentence'],properties:{word:{type:'string'},contextMeaning:{type:'string'},generalMeaning:{type:'string'},partOfSpeech:{type:'string'},exampleSentence:{type:'string'}}}},
-} };
-
-export default async function handler(request,response) {
-  if (request.method !== 'POST') return jsonResponse(response,405,{error:'Method not allowed'});
-  try {
-    const input=parseRequest(request); const sessionId=String(input.sessionId||''); const generationId=String(input.generationId||'');
-    if(!sessionId||!generationId) return jsonResponse(response,400,{error:'sessionId and generationId are required'});
-    const difficulty=Math.max(0,Math.min(17,Math.round(Number(input.difficulty)||0))); const profile=buildDifficultyProfile(difficulty); const recent=recentHistoryForPrompt(Array.isArray(input.recentPassages)?input.recentPassages:[]);
-    const historyText=JSON.stringify({requestIdentity:{sessionId,generationId},recentPassages:recent}).slice(0,14000);
-    const create=async(extra='')=>structuredCompletion({
-      system:'You are an expert English reading-assessment author. Produce rigorous, fair, self-contained material. Return only the requested structured data.',
-      user:`Create an original English passage of 800–1200 words. ${difficultyPrompt(profile)} The passage and its five questions must occupy the same calibrated level; at high levels, raise question difficulty through paraphrase, implication, inference, and synthesis rather than disproportionately harder option vocabulary. Prefer a concrete case study, historical episode, fictional company or city, scientific observation, policy experiment, comparison, discovery narrative, failed project with revision, or unexpected result. Avoid generic “technology has benefits and risks,” “green spaces are good,” “social media connects and divides,” or “exercise is healthy” essays. Use realistic fictional organizations, projects, or places when helpful, with specific policies, mechanisms, disagreements, chronology, tradeoffs, and unexpected outcomes; mark them internally with settingType="fictional" and fictionalEntityName. Alternatively use a less-famous real phenomenon that requires no outside knowledge and includes every necessary fact in the passage. Never turn proper names into a memory quiz. Choose from science, medicine, psychology, economics, history, philosophy, anthropology, linguistics, sociology, environment, biology, technology, education, culture, public policy, architecture, archaeology, or behavioral science, prioritizing a category not used in the most recent three records. Avoid semantic repetition of every recent record by comparing domain, thesis, caseType, settingType, organizationUsed, keyMechanism, outcome, argumentPattern, keywords, and examples. RECENT PASSAGES: ${historyText}. Internally draft 10 candidate questions and ask for each: “Could a reasonably educated person answer this correctly without reading the passage?” Reject it if yes. Also reject questions requiring outside specialist knowledge or merely recalling a proper name. Return only the best 5 questions whose answers depend on passage-specific cause, exception, chronology, comparison, interpretation, synthesis, or unexpected result. Set each audit truthfully: commonKnowledgeAnswerable=false, passageSpecificEvidence=true, specialistKnowledgeRequired=false, properNounRecall=false. Give exactly 4 choices per question. All four must be generally plausible; only passage details may distinguish the answer. Each choice must be a complete, information-rich sentence of roughly 18–42 words, with similar length, syntax, specificity, and style. For every question, explanation must explain the correct reasoning and why all three distractors fail; evidence must include enough wording from the passage for code-side verification. Return all requested case metadata for future story-structure duplicate detection. Return a natural complete Japanese translation and an approximately 200-character model Japanese summary. Also return 12–20 challenging lowercase words with contextMeaning and generalMeaning written in Japanese, English partOfSpeech, and a new short natural English exampleSentence that uses the same sense without copying the passage. generalMeaning must always be Japanese; English definitions are prohibited. Example: sustain → 「維持する、持続させる」. ${extra}`,
-      schema,
-    });
-    let data; let rejectionReason='';
-    for(let attempt=0;attempt<3;attempt+=1){
-      data=await create(attempt===0?'':`The previous draft was rejected because: ${rejectionReason}. Regenerate the complete assessment. Every choice must contain at least 12 words, remain balanced in length, and every evidence field must use wording found in the new passage. Change the case structure, mechanism, outcome, and examples when novelty failed.`);
-      try {
-        validateLongContent(data);
-        if(isTooSimilar(passageRecord(data,difficulty),recent))throw new Error('The draft was too similar to recent passage history');
-        rejectionReason=''; break;
-      } catch(error) {
-        rejectionReason=error.message;
-        if(attempt===2)throw error;
-      }
-    }
-    data.vocabulary=Object.fromEntries(data.vocabulary.map(({word,...details})=>[word.toLowerCase(),details])); data.sessionId=sessionId; data.generationId=generationId;
-    jsonResponse(response,200,data);
-  } catch(error) { jsonResponse(response,503,{error:error.message}); }
+export default function handler(request, response) {
+  return jsonResponse(response, 410, { error: '問題生成は終了しました。固定問題バンクを利用してください。' });
 }
