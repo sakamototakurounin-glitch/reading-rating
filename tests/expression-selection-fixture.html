@@ -1,0 +1,20 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="stylesheet" href="/styles.css"><title>LOCAL expression selection test</title></head><body>
+<div class="app-shell"><header class="topbar compact-topbar"><a class="brand" href="#">Reading Rating · LOCAL TEST</a><button class="profile-button" aria-label="プロフィールを開く">Profile</button></header><main id="app"></main></div>
+<script type="module">
+if(location.hostname!=='127.0.0.1'||location.port!=='4185')throw Error('Isolated local test only');
+const originalFetch=globalThis.fetch.bind(globalThis);
+// Synthetic content only on this isolated test origin. The real app and bank are unchanged.
+globalThis.fetch=async(url,options)=>{
+  const response=await originalFetch(url,options);
+  if(/^\/data\/banks\/long\/level-\d\.json$/.test(String(url))){
+    const bank=await response.json();
+    for(const item of bank.items){item.passage.title='Expression selection test';item.passage.paragraphs=[{id:'P1',text:'We take into account today. People work near solar panels. Costs change, costs rise.'}];}
+    return new Response(JSON.stringify(bank),{status:200,headers:{'Content-Type':'application/json'}});
+  }
+  return response;
+};
+if(!localStorage.getItem('reading-rating-state-v1')){
+  const {saveState,defaultState}=await import('/lib/storage.js');saveState({...defaultState,internalRating:80});
+}
+await import('/src/app.js');
+</script></body></html>

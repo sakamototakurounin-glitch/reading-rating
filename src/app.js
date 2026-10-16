@@ -13,6 +13,7 @@ import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 import { isJapaneseMeaning, normalizeUnknownWord, normalizeUnknownWords, historyRecordId } from '../lib/history-format.js';
 import { putSession, deleteSession, clearSessions, hydrateHistory } from '../lib/history-db.js';
 import { needsConciseMeaning, repairConciseMeanings } from '../lib/vocabulary-meaning.js';
+import { passageWordTokens, vocabularyFromSelection, resolveSelectedVocabulary } from '../lib/expression-selection.js';
 
 const app = document.querySelector('#app');
 let store = loadState();
@@ -140,7 +141,7 @@ async function startLong() {
     if(session?.sessionId!==context.sessionId)return;
     store.bankProgress={...store.bankProgress,long:{...store.bankProgress?.long,[difficulty]:selection.progress}};
     store.passageHistory=addPassagesToHistory(store.passageHistory,[content],difficulty); saveState(store);
-    session={...session,content,unknownWords:new Map(),phase:'ready',readingLimit:longReadingLimitSeconds(content.passage)}; renderReadingReady();
+    session={...session,content,unknownWords:new Map(),selectedTokenIndices:new Set(),phase:'ready',readingLimit:longReadingLimitSeconds(content.passage)}; renderReadingReady();
   } catch {
     if(session?.sessionId===context.sessionId)renderLongGenerationError();
   }
@@ -154,14 +155,31 @@ function renderLongGenerationError() {
 
 function renderLongReading() {
   const { content } = session;
-  const paragraphs = content.passage.split(/\n\s*\n/).map((p,i) => `<p data-paragraph="${i}">${tokenizeParagraph(p)}</p>`).join('');
+  let tokenIndex=0;
+  const paragraphs = content.passage.split(/\n\s*\n/).map((p,i) => `<p data-paragraph="${i}">${tokenizeParagraph(p,()=>tokenIndex++)}</p>`).join('');
   app.innerHTML = `<section class="long-reader-shell"><header class="long-reader-bar"><div><button class="text-button" data-home>← 終了</button><span class="passage-level">Level ${session.difficulty}</span></div><div class="timer-pill"><span>残り時間</span><b id="timer">${fmtTime(session.readingLimit)}</b></div></header><article class="long-passage-scroll"><header class="article-header compact-article-header"><p class="eyebrow">${escapeHtml(content.topic)}</p><h1>${escapeHtml(content.title)}</h1><p class="tap-guide"><span></span> 未知語をタップ</p><p class="reading-warning" hidden>残り1分です。まもなく問題へ移ります。</p></header><div class="long-copy">${paragraphs}</div></article><footer class="long-reader-action"><button class="primary-button dark" data-finish>読了・問題へ <span>→</span></button></footer></section>`;
   const updateTimer=()=>{const left=Math.max(0,session.readingLimit-(nowSeconds()-session.startedAt));app.querySelector('#timer').textContent=fmtTime(left);app.querySelector('.reading-warning').hidden=left>60;if(left<=0)finishLongReading(true);}; updateTimer(); session.timer=setInterval(updateTimer,250);
   app.querySelectorAll('.word-token').forEach((button)=>button.onclick=()=>toggleUnknown(button)); app.querySelector('[data-finish]').onclick=finishLongReading; app.querySelector('[data-home]').onclick=()=>{clearInterval(session.timer);renderHome();};
 }
 
-function tokenizeParagraph(text) { return text.split(/(\s+)/).map((token)=>{ if (/^\s+$/.test(token)) return token; const word=token.toLowerCase().replace(/^[^a-z]+|[^a-z'-]+$/g,''); return word ? `<button type="button" class="word-token" data-word="${escapeHtml(word)}">${escapeHtml(token)}</button>` : escapeHtml(token); }).join(''); }
-function toggleUnknown(button) { const word=button.dataset.word; if(session.unknownWords.has(word)) session.unknownWords.delete(word); else {const known=session.content.vocabulary?.[word];const rawMeaning=typeof known==='string'?known:known?.generalMeaning||known?.basicMeaning||known?.contextMeaning;session.unknownWords.set(word,typeof known==='string'?normalizeUnknownWord({word,generalMeaning:known,exampleSentence:`The report uses ${word} to describe its central finding.`}):normalizeUnknownWord({...known,word,pending:!known||!isJapaneseMeaning(rawMeaning)})); if(!known||!isJapaneseMeaning(rawMeaning))session.unknownWords.get(word).pending=true;} document.querySelectorAll(`[data-word="${CSS.escape(word)}"]`).forEach((el)=>el.classList.toggle('unknown',session.unknownWords.has(word))); }
+function tokenizeParagraph(text,nextIndex) {
+  let cursor=0;const pieces=[];
+  for(const token of passageWordTokens(text)){
+    pieces.push(escapeHtml(text.slice(cursor,token.start)),`<button type="button" class="word-token" data-word="${escapeHtml(token.word)}" data-token-index="${nextIndex()}" aria-pressed="false">${escapeHtml(token.text)}</button>`);cursor=token.end;
+  }
+  pieces.push(escapeHtml(text.slice(cursor)));return pieces.join('');
+}
+function toggleUnknown(button) {
+  const index=Number(button.dataset.tokenIndex),selected=session.selectedTokenIndices;
+  selected.has(index)?selected.delete(index):selected.add(index);
+  const previous=session.unknownWords;
+  session.unknownWords=new Map(vocabularyFromSelection(session.content.passage,[...selected]).map(word=>{
+    const known=previous.get(word)||session.content.vocabulary?.[word];
+    const rawMeaning=typeof known==='string'?known:known?.generalMeaning||known?.basicMeaning||known?.contextMeaning;
+    return [word,normalizeUnknownWord({...(typeof known==='string'?{generalMeaning:known}:known),word,pending:!known||!isJapaneseMeaning(rawMeaning)})];
+  }));
+  button.classList.toggle('unknown',selected.has(index));button.setAttribute('aria-pressed',String(selected.has(index)));
+}
 function finishLongReading(timedOut=false) { if(session.phase!=='reading')return; clearInterval(session.timer); session.readingTime=Math.min(session.readingLimit,Math.max(1,nowSeconds()-session.startedAt)); session.readingTimedOut=timedOut; session.phase='questions'; session.questionIndex=0; session.longAnswers=[]; renderLongQuestions(); }
 
 function renderLongQuestions() {
@@ -184,16 +202,17 @@ async function submitLong(event) {
   if(!summary||summary.length<40){app.querySelector('.form-notice').hidden=false;return;}
   current.summaryDraft=summary; current.submitting=true; current.phase='grading';
   try {
-  store.pendingLong={sessionId:current.sessionId,generationId:current.generationId,mode:'long',content:current.content,difficulty:current.difficulty,longAnswers:current.longAnswers,readingTime:current.readingTime,readingLimit:current.readingLimit,summaryDraft:summary,unknownWords:[...current.unknownWords],phase:'grading-pending'};
+  store.pendingLong={sessionId:current.sessionId,generationId:current.generationId,mode:'long',content:current.content,difficulty:current.difficulty,longAnswers:current.longAnswers,readingTime:current.readingTime,readingLimit:current.readingLimit,summaryDraft:summary,unknownWords:[...current.unknownWords],...(current.selectedTokenIndices?{selectedTokenIndices:[...current.selectedTokenIndices],expressionsResolved:Boolean(current.expressionsResolved)}:{}),phase:'grading-pending'};
   saveState(store);
   const mcCorrect=current.longAnswers.filter(isCorrectAnswer).length;
   renderLoading('採点中','理解の正確さと要約の質を確認しています。');
+  const unknownWords=await resolveUnknownWords(current);
+  if(session!==current)return;
+  Object.assign(store.pendingLong,{unknownWords:[...current.unknownWords],expressionsResolved:Boolean(current.expressionsResolved)});saveState(store);
   const response=await fetch('/api/grade-summary',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passage:current.content.passage,summary,sessionId:current.sessionId})});
   if(!response.ok)throw new Error('Summary grading unavailable');
   const gradeResponse=await response.json();
   normalizeSummaryGrade(gradeResponse);
-  if(session!==current)return;
-  const unknownWords=await resolveUnknownWords(current);
   if(session!==current)return;
   const prior=store.longHistory.find(r=>r.id===current.sessionId);if(prior){current.committed=true;renderLongResult(prior);return;}
   const grade=normalizeSummaryGrade(gradeResponse); const {summaryScore,multipleChoiceScore,totalScore,actualAccuracy:actual}=scoreLong(mcCorrect,grade.rawScore); const expected=expectedAccuracy(store.internalRating,session.difficulty); const oldRating=store.internalRating; const ratingUpdate=updateRatingWithCalibration(oldRating,actual,expected,store.longHistory.length); const wordCount=session.content.passage.trim().split(/\s+/).length; const wpm=calculateWpm(wordCount,session.readingTime);
@@ -208,17 +227,26 @@ async function submitLong(event) {
 
 function resumePendingLong() {
   if(!store.pendingLong)return;
-  session={...store.pendingLong,unknownWords:new Map(store.pendingLong.unknownWords),submitting:false};renderGradingPending();
+  session={...store.pendingLong,unknownWords:new Map(store.pendingLong.unknownWords),...(store.pendingLong.selectedTokenIndices?{selectedTokenIndices:new Set(store.pendingLong.selectedTokenIndices)}:{}),submitting:false};renderGradingPending();
 }
 
 function renderGradingPending() {
   app.innerHTML='<section class="generation-error" role="alert"><h1>要約の採点は保留中です</h1><p>Rating・履歴はまだ更新していません。通信状況を確認して再試行してください。</p><button class="primary-button dark" data-retry-grade>採点を再試行する</button><button class="text-button" data-edit-summary>要約を修正する</button><button class="text-button" data-home>ホームへ戻る</button></section>';
   app.querySelector('[data-retry-grade]').onclick=submitLong;
+  if(session?.expressionLookupFailed){app.querySelector('h1').textContent='熟語の確認に失敗しました';app.querySelector('p').textContent='選択した語は保持しています。Rating・履歴はまだ更新していません。再試行してください。';app.querySelector('[data-retry-grade]').textContent='熟語の確認・採点を再試行する';}
   app.querySelector('[data-edit-summary]').onclick=()=>{const draft=session.summaryDraft;renderLongSummary();session.summaryInput.setValue(draft);};
   app.querySelector('[data-home]').onclick=renderHome;
 }
 
 async function resolveUnknownWords(current=session) {
+  if(current.selectedTokenIndices&&!current.expressionsResolved){
+    let words;
+    try{words=await resolveSelectedVocabulary(current.content.passage,[...current.selectedTokenIndices]);}
+    catch{current.expressionLookupFailed=true;throw Error('Expression classification unavailable');}
+    current.expressionLookupFailed=false;
+    const previous=current.unknownWords;
+    current.unknownWords=new Map(words.map(word=>[word,previous.get(word)||{pending:true}]));current.expressionsResolved=true;
+  }
   const pending=[...current.unknownWords].filter(([,details])=>details?.pending||needsConciseMeaning(details)).map(([word])=>word);
   if(pending.length){
     const fallback=pending.map((word)=>({word,generalMeaning:'意味を取得できませんでした',exampleSentence:`The word ${word} is used naturally in this example.`}));
