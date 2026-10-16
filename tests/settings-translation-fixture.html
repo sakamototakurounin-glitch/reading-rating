@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="stylesheet" href="/styles.css"><title>LOCAL TEST ONLY</title></head>
+<body><div class="app-shell"><header class="topbar compact-topbar"><a class="brand" href="#">Reading Rating · LOCAL TEST</a><button class="profile-button" aria-label="プロフィールを開く">Profile</button></header><main id="app"></main></div>
+<script type="module">
+// Use a dedicated localhost port for this synthetic test; never open on production.
+if(!['127.0.0.1','localhost'].includes(location.hostname)||location.port!=='4182')throw Error('Local isolated test only');
+const {adaptLong}=await import('/lib/question-bank.js');
+const {defaultState,saveState}=await import('/lib/storage.js');
+const bank=await (await fetch('/data/banks/long/level-8.json')).json();
+const passage=adaptLong(bank.items[0]);
+const record={id:'test-full-translation',date:'2026-10-16T00:00:00.000Z',title:passage.title,passage,answers:[],passageDifficulty:8,totalScore:10,displayRatingBefore:80,displayRatingAfter:80,internalRatingBefore:80,internalRatingAfter:80,WPM:60,summary:'これは画面表示確認用の仮データです。',summaryScore:10,summaryDisplayScore:10,unknownWords:[]};
+saveState({...defaultState,internalRating:80,longHistory:[record],quickHistory:[],bankProgress:{long:{8:{remaining:['L8-001'],cycle:0}}}});
+Math.random=()=>.5;
+await import('/src/app.js');
+</script></body></html>

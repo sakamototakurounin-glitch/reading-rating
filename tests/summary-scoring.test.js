@@ -14,12 +14,12 @@ test('summary score recalculates six elements and floors the displayed score to 
   assert.equal(Number.isInteger(result.displayScore),true);
 });
 
-test('raw eleven is capped to ten for the Long total and Long remains out of 25',()=>{
+test('raw eleven is capped to ten for the Long total and Long remains out of 30',()=>{
   const result=grade([1,1,1,1,1,1],5);
   assert.equal(result.elementScore,6);
   assert.equal(result.rawScore,11);
   assert.equal(result.displayScore,10);
-  assert.equal(15+result.displayScore,25);
+  assert.equal(20+result.displayScore,30);
 });
 
 test('returned aggregate scores are ignored while raw half-points are floored for display',()=>{
@@ -33,7 +33,7 @@ test('raw scores above ten never add more than ten points to the Long total',()=
   const tenPointFive=grade([1,1,1,1,1,1],4.5);
   assert.equal(tenPointFive.rawScore,10.5);
   assert.equal(tenPointFive.displayScore,10);
-  assert.equal(15+tenPointFive.displayScore,25);
+  assert.equal(20+tenPointFive.displayScore,30);
 });
 
 test('exactly six passage-specific elements are required',()=>{

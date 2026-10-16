@@ -1,12 +1,14 @@
 """Local-only UI test server. Mock ancillary APIs; never use in production."""
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import argparse
 
 class Handler(SimpleHTTPRequestHandler):
     grading_calls = 0
+    root = 'dist'
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory='dist', **kwargs)
+        super().__init__(*args, directory=Handler.root, **kwargs)
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))) or '{}')
@@ -31,5 +33,10 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(content)
 
 if __name__ == '__main__':
-    print('LOCAL MOCK API TEST ONLY: http://127.0.0.1:4180/', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', 4180), Handler).serve_forever()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--port', type=int, default=4180)
+    parser.add_argument('--directory', default='dist')
+    args = parser.parse_args()
+    Handler.root = args.directory
+    print(f'LOCAL MOCK API TEST ONLY: http://127.0.0.1:{args.port}/', flush=True)
+    ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
