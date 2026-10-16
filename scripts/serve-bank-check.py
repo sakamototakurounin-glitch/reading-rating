@@ -5,6 +5,7 @@ import argparse
 
 class Handler(SimpleHTTPRequestHandler):
     grading_calls = 0
+    meaning_calls = 0
     root = 'dist'
 
     def __init__(self, *args, **kwargs):
@@ -19,8 +20,15 @@ class Handler(SimpleHTTPRequestHandler):
                 status, data = 503, {'error': 'Intentional test outage'}
             else:
                 data = {'elements': [{'name': f'要素{i}', 'score': 1, 'reason': 'UIテスト用'} for i in range(6)], 'impressionScore': 5, 'goodPoints': 'テスト用の評価です', 'missingPoints': 'テスト用', 'improvements': 'テスト用', 'modelSummary': 'これは接続と画面遷移だけを確認するテスト用の採点応答です。'}
+        elif self.path == '/api/lookup-words' and body.get('meaningsOnly'):
+            Handler.meaning_calls += 1
+            if Handler.meaning_calls == 1:
+                status, data = 503, {'error': 'Intentional meaning-repair test outage'}
+            else:
+                short = {'resilience':'回復力','allocation':'配分','transparency':'透明性','sustain':'維持する'}
+                data = [{'word': word, 'generalMeaning': short.get(word, '確認'), 'meaningFormat':'short-ja-v2'} for word in body.get('words', [])]
         elif self.path == '/api/lookup-words':
-            data = [{'word': word, 'generalMeaning': '確認用の日本語訳', 'exampleSentence': body.get('passage', '').split('.')[0] + '.'} for word in body.get('words', [])]
+            data = [{'word': word, 'generalMeaning': '確認用の日本語訳', 'meaningFormat':'short-ja-v2', 'exampleSentence': body.get('passage', '').split('.')[0] + '.'} for word in body.get('words', [])]
         elif self.path == '/api/recognize-handwriting':
             data = {'text': 'これは手書きAPI接続確認用の日本語要約です。'}
         else:

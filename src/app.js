@@ -12,6 +12,7 @@ import { normalizeSummaryGrade } from '../lib/summary-scoring.js';
 import { answerInputHtml, mountAnswerInput } from './answer-input.js';
 import { isJapaneseMeaning, normalizeUnknownWord, normalizeUnknownWords, historyRecordId } from '../lib/history-format.js';
 import { putSession, deleteSession, clearSessions, hydrateHistory } from '../lib/history-db.js';
+import { needsConciseMeaning, repairConciseMeanings } from '../lib/vocabulary-meaning.js';
 
 const app = document.querySelector('#app');
 let store = loadState();
@@ -218,16 +219,18 @@ function renderGradingPending() {
 }
 
 async function resolveUnknownWords(current=session) {
-  const pending=[...current.unknownWords].filter(([,details])=>details?.pending).map(([word])=>word);
+  const pending=[...current.unknownWords].filter(([,details])=>details?.pending||needsConciseMeaning(details)).map(([word])=>word);
   if(pending.length){
     const fallback=pending.map((word)=>({word,generalMeaning:'意味を取得できませんでした',exampleSentence:`The word ${word} is used naturally in this example.`}));
-    const entries=await requestContent('/api/lookup-words',{passage:current.content.passage,words:pending},fallback,(value)=>Array.isArray(value)?value:fallback);
+    const entries=[];
+    for(let start=0;start<pending.length;start+=40){const words=pending.slice(start,start+40);entries.push(...await requestContent('/api/lookup-words',{passage:current.content.passage,words},fallback.filter(entry=>words.includes(entry.word)),(value)=>Array.isArray(value)?value:fallback.filter(entry=>words.includes(entry.word))));}
     entries.forEach(({word,...details})=>{if(current.unknownWords.has(word.toLowerCase()))current.unknownWords.set(word.toLowerCase(),details);});
   }
   return normalizeUnknownWords([...current.unknownWords].map(([word,details])=>({word,...details})));
 }
 
 function renderLongResult(record) {
+  record.unknownWords=(record.unknownWords||[]).map(entry=>({...entry,...normalizeUnknownWord(entry)}));
   const vocabRows=record.unknownWords.length?record.unknownWords.map(({word,generalMeaning,exampleSentence})=>`<li><b>${escapeHtml(word)}</b><span><em>基本義：</em>${escapeHtml(generalMeaning)}<strong class="vocab-example">${escapeHtml(exampleSentence||'例文を取得できませんでした。')}</strong></span></li>`).join(''):'<li class="empty-row">今回は記録した単語はありません。</li>';
   app.innerHTML=`<section class="result-page"><div class="result-hero"><p class="eyebrow">LONG COMPLETE</p><div class="rating-shift"><span>${record.displayRatingBefore}</span><i>→</i><strong>${record.displayRatingAfter}</strong></div><h1>Reading Rating</h1><p>${record.internalRatingAfter>=100?'表示は100。内部Ratingは引き続き精密に更新されています。':'今回の理解度を反映しました。'}</p></div><div class="result-grid"><div class="result-stat featured"><span>Total score</span><strong>${record.totalScore}<small>/${longScoreMax(record)}</small></strong></div><div class="result-stat"><span>選択問題</span><strong>${record.multipleChoiceScore}<small>/${longChoiceMax(record)}</small></strong></div><div class="result-stat"><span>日本語要約</span><strong>${record.summaryScore}<small>/10</small></strong></div><div class="result-stat"><span>Reading time</span><strong>${fmtTime(record.readingTime)}</strong></div><div class="result-stat"><span>WPM</span><strong>${record.WPM}</strong></div></div><section class="feedback-card summary-feedback"><p class="eyebrow">SUMMARY FEEDBACK</p><div><h2>自分の回答</h2><p>${escapeHtml(record.summary)}</p></div><div class="summary-score"><strong>${record.summaryScore}<small>/10</small></strong><p><b>良かった点：</b>${escapeHtml(record.goodPoints)}</p><p><b>不足したポイント：</b>${escapeHtml(record.missingPoints)}</p><p><b>改善ポイント：</b>${escapeHtml(record.improvements)}</p></div><details><summary>模範解答を見る</summary><p>${escapeHtml(record.modelAnswer)}</p></details></section><details class="review-card"><summary>選択問題・本文を復習</summary>${reviewHtml([record.passage],record.answers||[])}</details><section class="vocab-card"><div><p class="eyebrow">UNKNOWN WORDS</p><h2>今回の未知語</h2></div><ul>${vocabRows}</ul><div class="vocab-actions"><button class="primary-button" data-copy-3 ${record.unknownWords.length?'':'disabled'}>3列でコピー <span>⧉</span></button><button class="primary-button" data-copy-2 ${record.unknownWords.length?'':'disabled'}>従来2列でコピー <span>⧉</span></button></div></section><div class="result-actions"><button class="primary-button dark" data-home>ホームへ <span>→</span></button></div></section>`;
   app.querySelector('[data-home]').onclick=renderHome; mountReviewToggles();
@@ -235,6 +238,34 @@ function renderLongResult(record) {
   // Legacy contextMeaning is retained internally for older snapshots; Vocabstar output uses the concrete generalMeaning.
   // Previous format: `${v.word}\t${v.contextMeaning}\t${v.exampleSentence||''}`
   copyRows('[data-copy-3]',(v)=>`${v.word}\t${v.generalMeaning}\t${v.exampleSentence||''}`); copyRows('[data-copy-2]',(v)=>`${v.word}\t${v.generalMeaning}`);
+  mountConciseVocabulary(record,'long',record.unknownWords);
+}
+
+const meaningRepairJobs=new WeakMap();
+function mountConciseVocabulary(record,mode,entries){
+  if(!entries.some(needsConciseMeaning))return;
+  const card=app.querySelector('.vocab-card');if(!card)return;
+  const list=card.querySelector('ul'),buttons=[...card.querySelectorAll('button')];
+  const status=document.createElement('p');status.setAttribute('role','status');status.style.gridColumn='1 / -1';card.insertBefore(status,list);
+  const retry=document.createElement('button');retry.type='button';retry.className='text-button';retry.textContent='短い訳語を再取得';retry.style.gridColumn='1 / -1';retry.hidden=true;card.append(retry);
+  const draw=()=>{list.innerHTML=entries.map(entry=>`<li><b>${escapeHtml(entry.word)}</b><span><em>基本義：</em>${needsConciseMeaning(entry)?'訳語を取得中…':escapeHtml(entry.generalMeaning)}<strong class="vocab-example">${escapeHtml(entry.exampleSentence||'')}</strong></span></li>`).join('');};
+  const run=async()=>{
+    buttons.forEach(button=>button.disabled=true);retry.hidden=true;status.textContent='すべての単語を短い訳語に更新しています…';draw();
+    let job=meaningRepairJobs.get(record);
+    if(!job){job=repairConciseMeanings(entries,record.originalPassage||record.passage?.passage||'');meaningRepairJobs.set(record,job);}
+    const updated=await job;if(meaningRepairJobs.get(record)===job)meaningRepairJobs.delete(record);
+    const originals=record.unknownWords||[];
+    entries.splice(0,entries.length,...updated.entries.map((entry,index)=>({...originals[index],...entry})));record.unknownWords=entries;
+    const history=mode==='long'?store.longHistory:store.quickHistory;
+    let localSaveFailed=false;
+    if(history.includes(record)){record.id=record.id||historyRecordId(mode,record,history.indexOf(record));try{saveState(store);}catch{localSaveFailed=true;}void putSession(mode,record);}
+    if(!card.isConnected)return;
+    draw();const complete=updated.unresolved.length===0;
+    status.textContent=complete?(localSaveFailed?'短い訳語に更新しました。端末の保存容量も確認してください。':'短い訳語に更新しました。'):'一部の訳語を取得できませんでした。再取得してください。';
+    if(!complete)list.querySelectorAll('li').forEach((row,index)=>{if(needsConciseMeaning(entries[index]))row.querySelector('span').innerHTML=`<em>基本義：</em>訳語を取得できませんでした<strong class="vocab-example">${escapeHtml(entries[index].exampleSentence||'')}</strong>`;});
+    buttons.forEach(button=>button.disabled=!complete);retry.hidden=complete;
+  };
+  retry.onclick=()=>{void run();};void run();
 }
 
 let reviewTranslationIds=new Map();
@@ -295,7 +326,8 @@ function renderHistoryDetail(mode,index) {
   const title=mode==='long'?(record.title||record.passage?.title||'Long session'):'Quick session'; const review=mode==='long'?reviewHtml([record.passage||{questions:record.questions||[],passage:record.originalPassage||'',translation:record.japaneseTranslation||'',title}],record.answers||[]):reviewHtml(record.passages||[],record.answers||[]);
   app.innerHTML=`<section class="history-detail-page"><button class="text-button" data-history-back>← 履歴へ戻る</button><p class="eyebrow">${mode.toUpperCase()} SESSION</p><h1>${escapeHtml(title)}</h1><p>${new Date(record.date).toLocaleString('ja-JP')}</p><div class="result-grid"><div class="result-stat"><span>Score</span><strong>${mode==='long'?`${record.totalScore}/${longScoreMax(record)}`:`${record.correctAnswers}/9`}</strong></div><div class="result-stat"><span>Speed</span><strong>${mode==='long'?record.WPM:record.averageWPM} WPM</strong></div></div>${mode==='long'?`<section class="feedback-card"><h2>自分の要約</h2><p>${escapeHtml(record.summary||'')}</p><p><b>要約スコア：</b>${record.summaryDisplayScore??record.summaryScore??'—'}/10</p><p><b>模範要約：</b>${escapeHtml(record.modelAnswer||record.sampleSummary||'')}</p></section>`:''}<details class="review-card" open><summary>回答・解説・本文</summary>${review}</details>${unknownHtml}<button class="danger-button" data-history-remove>このセッションを削除</button></section>`;
   app.querySelector('[data-history-back]').onclick=()=>renderHistory(mode); app.querySelector('[data-history-remove]').onclick=()=>{if(window.confirm('この履歴を削除しますか？')){list.splice(index,1);saveState(store);void deleteSession(mode,record.id||historyRecordId(mode,record,index));renderHistory(mode);}}; mountReviewToggles();
-  app.querySelector('[data-copy-history]')?.addEventListener('click',async(event)=>{await navigator.clipboard.writeText(unknown.map((v)=>`${v.word}\t${v.generalMeaning}\t${v.exampleSentence||''}`).join('\n'));event.currentTarget.textContent='コピーしました ✓';});
+  app.querySelector('[data-copy-history]')?.addEventListener('click',async(event)=>{const button=event.currentTarget;await navigator.clipboard.writeText(unknown.map((v)=>`${v.word}\t${v.generalMeaning}\t${v.exampleSentence||''}`).join('\n'));button.textContent='コピーしました ✓';});
+  mountConciseVocabulary(record,mode,unknown);
 }
 
 document.querySelector('.profile-button').onclick=()=>{if(session?.timer)clearInterval(session.timer);session=null;document.body.classList.remove('question-active');renderProfile();}; document.querySelector('.brand').onclick=(event)=>{event.preventDefault();renderHome();}; renderHome();

@@ -1,0 +1,14 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><title>LOCAL meaning repair test</title></head><body>
+<div class="app-shell"><header class="topbar compact-topbar"><a class="brand" href="#">Reading Rating · LOCAL TEST</a><button class="profile-button" aria-label="プロフィールを開く">Profile</button></header><main id="app"></main></div>
+<script type="module">
+if(location.hostname!=='127.0.0.1'||location.port!=='4184')throw Error('Isolated local test only');
+if(!localStorage.getItem('reading-rating-state-v1')){
+  const {adaptLong}=await import('/lib/question-bank.js');const {saveState,defaultState}=await import('/lib/storage.js');
+  const bank=await (await fetch('/data/banks/long/level-8.json')).json();const passage=adaptLong(bank.items[0]);
+  const words=[['resilience','困難な状況から再び元の状態へ戻ること'],['allocation','利用できる資源を複数の対象へ適切に分け与えること'],['transparency','物事の内容や決定の過程を外部から確認できるようにすること'],['sustain','何かを長い期間にわたって維持し続けること']];
+  const unknownWords=words.map(([word,generalMeaning])=>({word,generalMeaning,exampleSentence:`Original example for ${word}.`,partOfSpeech:'test',customSource:'retain-me'}));
+  const record={id:'test-short-meanings',date:'2026-10-16T00:00:00Z',title:passage.title,passage,originalPassage:passage.passage,answers:[],passageDifficulty:8,totalScore:30,scoreMax:30,multipleChoiceMax:20,displayRatingBefore:80,displayRatingAfter:80,internalRatingBefore:80,internalRatingAfter:80,WPM:60,summary:'LOCAL TEST',summaryScore:10,summaryDisplayScore:10,unknownWords};
+  saveState({...defaultState,internalRating:80,longHistory:[record]});
+}
+await import('/src/app.js');
+</script></body></html>

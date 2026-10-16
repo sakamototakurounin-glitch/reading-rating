@@ -1,5 +1,5 @@
 import { jsonResponse, parseRequest, structuredCompletion } from './_openai.js';
-import { isConciseJapaneseMeaning, shortKnownMeaning } from '../lib/vocabulary-meaning.js';
+import { CONCISE_MEANING_FORMAT, isConciseJapaneseMeaning, shortKnownMeaning } from '../lib/vocabulary-meaning.js';
 
 const schema={type:'object',additionalProperties:false,required:['entries'],properties:{entries:{type:'array',minItems:1,maxItems:40,items:{type:'object',additionalProperties:false,required:['word','contextMeaning','generalMeaning','partOfSpeech','exampleSentence'],properties:{word:{type:'string'},contextMeaning:{type:'string'},generalMeaning:{type:'string'},partOfSpeech:{type:'string'},exampleSentence:{type:'string'}}}}}};
 
@@ -10,13 +10,13 @@ const correctionSchema={type:'object',additionalProperties:false,required:['entr
 export default async function handler(request,response) {
   if(request.method!=='POST') return jsonResponse(response,405,{error:'Method not allowed'});
   try {
-    const {passage,words}=parseRequest(request);
+    const {passage,words,meaningsOnly,entries:previousEntries}=parseRequest(request);
     const requested=Array.isArray(words)?words.map(String).filter(Boolean).slice(0,40):[];
-    if(!passage||!requested.length) return jsonResponse(response,400,{error:'passage and words are required'});
+    if((!passage&&!meaningsOnly)||!requested.length) return jsonResponse(response,400,{error:'passage and words are required'});
     let data=await structuredCompletion({
       system:'You provide concise, concrete English vocabulary help in Japanese. Return only structured data.',
-      user:promptFor(requested,passage),
-      schema,
+      user:meaningsOnly?`${conciseRule}\nReturn generalMeaning for EVERY requested word, not just the example words above. Correct old definitions into conventional short translation equivalents. Do not return examples or other fields.\nWORDS: ${requested.join(', ')}\nPREVIOUS: ${JSON.stringify(Array.isArray(previousEntries)?previousEntries.filter(entry=>requested.includes(entry.word)).map(({word,generalMeaning})=>({word,generalMeaning:String(generalMeaning||'').slice(0,300)})):[])}\nPASSAGE:\n${String(passage||'').slice(0,14000)}`:promptFor(requested,passage),
+      schema:meaningsOnly?correctionSchema:schema,
     });
     data.entries=data.entries.map(entry=>({...entry,generalMeaning:shortKnownMeaning(entry.word,entry.generalMeaning)}));
     const invalid=data.entries.filter((entry)=>!isConciseJapaneseMeaning(entry.generalMeaning));
@@ -25,7 +25,8 @@ export default async function handler(request,response) {
       const replacements=new Map(corrected.entries.map((entry)=>[entry.word.toLowerCase(),entry.generalMeaning]));
       data={entries:data.entries.map((entry)=>({...entry,generalMeaning:shortKnownMeaning(entry.word,replacements.get(entry.word.toLowerCase())||entry.generalMeaning)}))};
     }
-    data.entries=data.entries.map((entry)=>({...entry,generalMeaning:isConciseJapaneseMeaning(entry.generalMeaning)?entry.generalMeaning:'意味を取得できませんでした'}));
+    const valid=new Map(data.entries.filter(entry=>requested.some(word=>word.toLowerCase()===entry.word.toLowerCase())&&isConciseJapaneseMeaning(entry.generalMeaning)).map(entry=>[entry.word.toLowerCase(),entry]));
+    data.entries=requested.map(word=>{const entry=valid.get(word.toLowerCase());return entry?{...entry,word,meaningFormat:CONCISE_MEANING_FORMAT}:{word,generalMeaning:'意味を取得できませんでした'};});
     jsonResponse(response,200,data.entries);
   } catch(error) { jsonResponse(response,503,{error:error.message}); }
 }
