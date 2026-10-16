@@ -16,6 +16,12 @@ const vercel = JSON.parse(await readFile(new URL('../vercel.json', import.meta.u
 const styles = await readFile(new URL('../styles.css', import.meta.url), 'utf8');
 const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
+test('iPad vocabulary lists use two entries per row without changing the phone breakpoint',()=>{
+  assert.match(styles,/@media \(min-width:768px\) and \(max-width:1439px\)/);
+  assert.match(styles,/\.vocab-card > ul \{ display:grid; grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(styles,/\.vocab-card > ul > li \{ min-width:0; grid-template-columns:minmax\(0,1fr\)/);
+});
+
 test('top screen uses compact modes and profile instead of rating hero',()=>{
   assert.match(app,/compact-home/); assert.doesNotMatch(app,/rating-orbit/); assert.match(html,/profile-button/);
 });

@@ -353,3 +353,12 @@ body.question-active .focus-question { width:100%; height:100dvh; min-height:0; 
   .rating-setup h1 { font-size:22px; }
   .rating-options button { font-size:22px; }
 }
+
+/* Tablet/iPad: two vocabulary entries per row, with each entry stacked vertically. */
+@media (min-width:768px) and (max-width:1439px) {
+  .vocab-card { grid-template-columns:minmax(0,1fr); gap:18px; }
+  .vocab-card > ul { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:24px; }
+  .vocab-card > ul > li { min-width:0; grid-template-columns:minmax(0,1fr); gap:4px; align-content:start; overflow-wrap:anywhere; }
+  .vocab-card > ul > .empty-row { grid-column:1 / -1; }
+  .vocab-card .primary-button,.vocab-actions { grid-column:1; }
+}
