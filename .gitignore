@@ -4,3 +4,5 @@ dist
 node_modules
 *.log
 .browser-check-*/
+test-results/
+playwright-report/
