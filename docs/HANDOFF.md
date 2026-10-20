@@ -15,6 +15,9 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - E2E はスモークに加え、Level 0/2 のLong採点フロー（20+10=30、要約11→10、和訳の並び）を検証する。Quick の一連フローは `scripts/check-bank-browser.mjs`（Edge 前提）にある。
 
 ## 作業記録
+### 2026-10-20 Claude Code — 初期Rating選択をスライドバーに変更（`claude/rating-slider`）
+- 仕様変更：初回の Rating 選択を 9 個のボタンからスライドバー（0〜80、1刻み、初期値40）＋「このRatingで始める」ボタンに変更。数値と英検の目安（2級／準1級／1級前後）を表示。範囲は `RATING.initialOptions` の最小・最大を流用。
+- 変更：`src/app.js`（renderRatingSetup）、`styles.css`、`e2e/smoke.spec.js`（スライドバーのテスト追加）。npm test 89件・E2E 12件成功。
 ### 2026-10-20 Claude Code — Long 全レベルで解説を設問和訳に統一（`claude/long-ja-all`）
 - L0・L1・L6〜L9（110題）の解説を削除し、設問・選択肢の和訳を追加。正解 score を 4 に統一。英文・設問・正解は変更なし。
 - 仕様変更：Long は全レベルで結果画面が「和訳を見る」表示に（Quick は従来の解説のまま）。

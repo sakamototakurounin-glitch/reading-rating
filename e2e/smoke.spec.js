@@ -35,3 +35,17 @@ test('スマホ幅で横スクロールが発生しない', async ({ page }) => 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test('初回はスライドバーでRatingを選べる', async ({ page }) => {
+  await page.goto('/');
+  const slider = page.locator('[data-initial-rating]');
+  await expect(slider).toBeVisible();
+  await slider.fill('37');
+  await expect(page.locator('[data-rating-value]')).toHaveText('37');
+  await page.locator('[data-confirm-rating]').click();
+  await expect(page.getByRole('heading', { name: 'Quick' })).toBeVisible();
+  const saved = await page.evaluate(([key]) => JSON.parse(localStorage.getItem(key)), [KEY]);
+  expect(saved.internalRating).toBe(37);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
