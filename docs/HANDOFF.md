@@ -5,7 +5,7 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 ## 作業中（同時編集防止）
 | 担当AI | ブランチ | 編集予定ファイル | 開始日 |
 |---|---|---|---|
-| Codex | `codex/claude-permissions` | `.claude/settings.json`、`AGENTS.md`、`docs/HANDOFF.md` | 2026-10-20 |
+| （なし） | | | |
 
 ## 未解決の問題
 - L0・L1・L6〜L9 の設問和訳は Sonnet で作成（抜き取りで意味の逆転 1 件を修正済み、全件の精査は未実施）。
@@ -15,6 +15,11 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - E2E はスモークに加え、Level 0/2 のLong採点フロー（20+10=30、要約11→10、和訳の並び）を検証する。Quick の一連フローは `scripts/check-bank-browser.mjs`（Edge 前提）にある。
 
 ## 作業記録
+### 2026-10-20 Codex — Claude Code のPR操作権限を設定（`codex/claude-permissions`）
+- `.claude/settings.json` に `gh pr create` / `view` / `checks` / `merge` の許可を追加。トークンや環境変数の値は保存していない。
+- `AGENTS.md` に、`gh pr merge` はユーザーが「マージして」と明示した場合のみ、main への直接 push は禁止、と追記。
+- 検証：設定JSONと許可4件を確認、単体テスト89件・ローカルのスマホ/PC E2E10件成功。アプリコード・教材・保存データは変更なし。
+- 次の作業：ユーザーがPRを確認してマージ。Fine-grained token の作成とクラウド環境の `GH_TOKEN` 登録もユーザーが行う。今回マージ・本番デプロイは実施しない。
 ### 2026-10-20 Claude Code — Long 全レベルで解説を設問和訳に統一（`claude/long-ja-all`）
 - L0・L1・L6〜L9（110題）の解説を削除し、設問・選択肢の和訳を追加。正解 score を 4 に統一。英文・設問・正解は変更なし。
 - 仕様変更：Long は全レベルで結果画面が「和訳を見る」表示に（Quick は従来の解説のまま）。
