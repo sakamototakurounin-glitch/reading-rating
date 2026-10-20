@@ -5,7 +5,7 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 ## 作業中（同時編集防止）
 | 担当AI | ブランチ | 編集予定ファイル | 開始日 |
 |---|---|---|---|
-| （なし） | | | |
+| Claude Code | `claude/long-ja-all` | data/banks/long/level-0,1,6,7,8,9.json, README.md, docs/ | 2026-10-20 |
 
 ## 未解決の問題
 - Level 0・1・6〜9 は旧データ（解説あり）。設問和訳は作成済みだが未取り込み。
