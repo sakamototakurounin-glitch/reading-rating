@@ -5,7 +5,7 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 ## 作業中（同時編集防止）
 | 担当AI | ブランチ | 編集予定ファイル | 開始日 |
 |---|---|---|---|
-| （なし） | | | |
+| Codex | codex/unify-long-points | data/banks/long/（配点のみ）, lib/long-scoring.js, scripts/import-banks.py, tests/, docs/ | 2026-10-20 |
 
 ## 未解決の問題
 - Level 4・5 は再生成中（作成ガイド long_reading_300_creation_guide に基づく）。完成後に L2・L3 と同じ形式（解説なし・設問和訳つき）で差し替える予定。
