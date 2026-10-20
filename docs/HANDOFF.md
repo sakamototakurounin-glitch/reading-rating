@@ -5,7 +5,7 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 ## 作業中（同時編集防止）
 | 担当AI | ブランチ | 編集予定ファイル | 開始日 |
 |---|---|---|---|
-| （なし） | | | |
+| Codex | `codex/equal-rating-layout` | `src/app.js`、`styles.css`、`e2e/quick-rating.spec.js`、`tests/ui-contract.test.js`、`docs/HANDOFF.md` | 2026-10-21 |
 
 ## 未解決の問題
 - L0・L1・L6〜L9 の設問和訳は Sonnet で作成（抜き取りで意味の逆転 1 件を修正済み、全件の精査は未実施）。
