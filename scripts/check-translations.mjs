@@ -19,5 +19,7 @@ for(let level=0;level<10;level++){
     completed.push(item.id);
   }
 }
-console.log(JSON.stringify({completed:completed.length,total:240,missing},null,2));
+const total=JSON.parse(fs.readFileSync('data/banks/manifest.json','utf8')).longPassages;
+console.log(JSON.stringify({completed:completed.length,total,missing},null,2));
+if(!process.argv.includes('--partial'))assert.equal(completed.length,total);
 if(missing.length&&!process.argv.includes('--partial'))process.exitCode=1;

@@ -6,3 +6,4 @@ node_modules
 .browser-check-*/
 test-results/
 playwright-report/
+__pycache__/
