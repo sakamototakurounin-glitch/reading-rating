@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { loadLongTranslation } from '../lib/translation.js';
 import { readFile } from 'node:fs/promises';
 
-test('all 240 static translations load in the browser format with every source paragraph',async()=>{
+test('all 300 static translations load in the browser format with every source paragraph',async()=>{
   const root=new URL('../',import.meta.url);let count=0;
   for(let level=0;level<10;level++){
     const bank=JSON.parse(await readFile(new URL(`data/banks/long/level-${level}.json`,root),'utf8')).items;
@@ -16,7 +16,7 @@ test('all 240 static translations load in the browser format with every source p
       assert.doesNotMatch(translated,/未収録|翻訳予定|TODO/);count++;
     }
   }
-  assert.equal(count,240);
+  assert.equal(count,300);
 });
 
 test('static full translation is cached and preserves paragraph order',async()=>{

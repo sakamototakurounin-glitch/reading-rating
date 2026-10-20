@@ -8,16 +8,16 @@ import longHandler from '../api/generate-long.js';
 
 const quick=JSON.parse(await readFile(new URL('../data/banks/quick.json',import.meta.url))).passages;
 const levels=await Promise.all(Array.from({length:10},async(_,i)=>JSON.parse(await readFile(new URL(`../data/banks/long/level-${i}.json`,import.meta.url))).items));
-test('only supplied 167 Quick / 240 Long passages, 1701 questions and 6804 choices exist',()=>{
-  assert.equal(quick.length,167);assert.deepEqual(levels.map(v=>v.length),[10,10,10,20,50,50,50,20,10,10]);
+test('only supplied 167 Quick / 300 Long passages, 2001 questions and 8004 choices exist',()=>{
+  assert.equal(quick.length,167);assert.deepEqual(levels.map(v=>v.length),[10,10,40,50,50,50,50,20,10,10]);
   const ids=new Set();let questions=0,choices=0;
-  for(const [mode,items] of [['quick',quick],['long',levels.flat()]])for(const p of items){assert.ok(!ids.has(p.id));ids.add(p.id);assert.equal(p.questions.length,mode==='quick'?3:5);for(const q of p.questions){assert.ok(!ids.has(q.id));ids.add(q.id);questions++;const options=q.options||q.choices;assert.equal(options.length,4);choices+=4;assert.equal(options.filter(c=>c.id===(q.answer_id||q.correct_choice_id)).length,1);if(mode==='long'){assert.equal(options.filter(c=>c.score===3).length,1);assert.equal(options.filter(c=>c.score===0).length,3);}}}
-  assert.equal(questions,1701);assert.equal(choices,6804);
+  for(const [mode,items] of [['quick',quick],['long',levels.flat()]])for(const p of items){assert.ok(!ids.has(p.id));ids.add(p.id);assert.equal(p.questions.length,mode==='quick'?3:5);for(const q of p.questions){assert.ok(!ids.has(q.id));ids.add(q.id);questions++;const options=q.options||q.choices;assert.equal(options.length,4);choices+=4;assert.equal(options.filter(c=>c.id===(q.answer_id||q.correct_choice_id)).length,1);if(mode==='long'){assert.equal(options.filter(c=>c.id===q.correct_choice_id&&(c.score===3||c.score===4)).length,1);assert.equal(options.filter(c=>c.score===0).length,3);}}}
+  assert.equal(questions,2001);assert.equal(choices,8004);
 });
 test('all adapted questions preserve text, IDs and correct content through repeated shuffles',()=>{
   for(const [mode,items,adapt] of [['quick',quick,adaptQuick],['long',levels.flat(),adaptLong]])for(const p of items)for(const r of [0,.23,.7,.999]){
     const result=adapt(p,()=>r);assert.equal(result.questions.length,mode==='quick'?3:5);
-    p.questions.forEach((q,i)=>{const a=result.questions[i],options=q.options||q.choices,correctId=q.answer_id||q.correct_choice_id;assert.deepEqual([...a.choices].sort(),options.map(c=>c.text).sort());assert.equal(a.choiceIds[a.answer],correctId);assert.equal(a.correctChoiceId,correctId);assert.equal(a.choices[a.answer],options.find(c=>c.id===correctId).text);assert.ok(isCorrectAnswer({selectedId:correctId,answerId:correctId}));assert.ok(!isCorrectAnswer({selectedId:null,answerId:correctId}));assert.ok(a.evidence);assert.ok(a.explanation);});
+    p.questions.forEach((q,i)=>{const a=result.questions[i],options=q.options||q.choices,correctId=q.answer_id||q.correct_choice_id;assert.deepEqual([...a.choices].sort(),options.map(c=>c.text).sort());assert.equal(a.choiceIds[a.answer],correctId);assert.equal(a.correctChoiceId,correctId);assert.equal(a.choices[a.answer],options.find(c=>c.id===correctId).text);assert.ok(isCorrectAnswer({selectedId:correctId,answerId:correctId}));assert.ok(!isCorrectAnswer({selectedId:null,answerId:correctId}));assert.ok(a.evidence);if(q.stem_ja){assert.equal(a.promptJa,q.stem_ja);assert.deepEqual(a.choiceIds.map(id=>options.find(c=>c.id===id).text_ja),a.choicesJa);}else assert.ok(a.explanation);});
   }
 });
 test('Quick consumes all 167 including the final two before restarting, with no session duplicate',()=>{
