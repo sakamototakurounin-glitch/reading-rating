@@ -12,9 +12,16 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - L2〜L5 の差し替えで同じ ID の題は内容が変わった。履歴の和訳タブは常にサーバーの最新和訳を読むため、旧版で解いた履歴では英文と和訳が食い違う。オーナー判断で履歴は全消去する方針のため対応しない。
 - L4・L5 は Opus の抜き取り再検証（10題）で 6 題に軽微な修正あり。残り 90 題にも同程度の軽微な問題が残る可能性（全件検証は未実施）。
 - `api/generate-quick.js` / `api/generate-long.js` は 410 で無効化済み（README の方針どおり）。削除するかは未決定。
-- E2E はスモークに加え、Level 0/2 のLong採点フロー（20+10=30、要約11→10、和訳の並び）を検証する。Quick の一連フローは `scripts/check-bank-browser.mjs`（Edge 前提）にある。
+- E2E はLong採点（20+10=30、要約11→10、和訳の並び）とQuick Rating・読書時間・旧履歴互換性・リセットを検証する。`scripts/check-bank-browser.mjs` は旧来のAPI再試行などの追加確認用（Edge 前提）。
 
 ## 作業記録
+### 2026-10-21 Codex — Quick Rating化・実測WPMを廃止（`codex/quick-rating`）
+- 仕様変更：QuickはLongと独立したRating。同じ初期スライダー値から開始し、旧端末のみ導入時のLong Ratingを引き継ぐ。9/8/7/6/5問正解で+2/+1/0/−1/−2、0〜4問は−3、下限0。セット終了時に1回更新する。
+- 各本文の読書制限は `ceil(語数*60/(max(10,Quick Rating)*3))` 秒。旧時間の平均調整・45〜300秒上限は廃止。選択問題60秒/120秒、Long採点・読書制限・教材は不変。
+- Long/Quickの実測WPMの計算・表示・新規記録を廃止。旧WPMフィールドは削除せず非表示にし、旧QuickにRatingを遡及付与しない。
+- 互換性検証で見つかった履歴復元の欠落を修正：IndexedDBに新規履歴がある場合も、localStorageだけにある旧履歴をIDで統合・保存する。
+- 検証：単体96件、ローカルChromiumのスマホ/PC E2E28件、ビルド成功。Rating 0/10/40/60/80、時間切れ、独立更新、再読み込み、旧Long/Quick履歴、375/390/430px、初期設定とリセットを確認。APIはモック、本番への接続なし。
+- 次の作業：PRレビュー・ユーザーの明示的なマージ指示待ち。mainへの直接push・本番デプロイは実施しない。
 ### 2026-10-20 Claude Code — 初期Rating選択をスライドバーに変更（`claude/rating-slider`）
 - 仕様変更：初回の Rating 選択を 9 個のボタンからスライドバー（0〜80、1刻み、初期値40）＋「このRatingで始める」ボタンに変更。数値と英検の目安（2級／準1級／1級前後）を表示。範囲は `RATING.initialOptions` の最小・最大を流用。
 - 変更：`src/app.js`（renderRatingSetup）、`styles.css`、`e2e/smoke.spec.js`（スライドバーのテスト追加）。npm test 89件・E2E 12件成功。

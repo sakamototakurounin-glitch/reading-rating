@@ -46,6 +46,7 @@ test('初回はスライドバーでRatingを選べる', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Quick' })).toBeVisible();
   const saved = await page.evaluate(([key]) => JSON.parse(localStorage.getItem(key)), [KEY]);
   expect(saved.internalRating).toBe(37);
+  expect(saved.quickRating).toBe(37);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
