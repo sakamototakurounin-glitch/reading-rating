@@ -21,7 +21,7 @@
 - 要約採点 API が失敗した場合は「採点保留」とし、Rating を更新しない（ローカルでの暫定採点はしない）。
 - Long は 30 点満点（選択 5×4 + 要約 10）。旧履歴は 25 点満点のまま保持。
 - 教材全1500問の正解 `score` も4点、誤答は0点。`scripts/long_bank_format.py` が取り込み時に旧3点の正解メタデータを4点へ変換する。本文・設問・和訳・正解IDは保持し、不正な正解IDや部分点は拒否する。manifest の `longScoring` と実採点の一致をテストする。
-- Level 2・3（2026-10 差し替え）は解説（rationale）なし。設問・選択肢の和訳（`stem_ja`・`choices[].text_ja`）を持ち、`adaptLong` が `promptJa`・`choicesJa` に変換して結果画面に表示する。和訳がない問題は従来の解説を表示。
+- Level 2〜5（2026-10 差し替え。L4・L5 は作成ガイドに基づき全文再生成）は解説（rationale）なし。設問・選択肢の和訳（`stem_ja`・`choices[].text_ja`）を持ち、`adaptLong` が `promptJa`・`choicesJa` に変換して結果画面に表示する。和訳がない問題は従来の解説を表示。
 - 詳細仕様は README.md / BANK_INTEGRATION_REPORT.md / TRANSLATION_SCORING_RELEASE.md
 
 ## テスト
