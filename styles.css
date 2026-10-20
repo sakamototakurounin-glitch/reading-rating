@@ -259,10 +259,11 @@ body.question-active .focus-question { width:100%; height:100dvh; min-height:0; 
 .long-passage-scroll { min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; background:var(--paper); }
 .long-reader-action { padding:10px max(14px,calc((100% - 720px)/2)) calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--line); background:var(--cream); }
 .profile-page { min-height:calc(100dvh - 56px); max-width:900px; margin:auto; padding:clamp(20px,5vw,54px); display:grid; gap:16px; align-content:center; }
-.profile-rating { background:var(--ink); color:white; min-height:210px; display:grid; place-items:center; align-content:center; }
+.profile-ratings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.profile-rating { min-width:0; padding:14px 8px; background:var(--ink); color:white; min-height:210px; display:grid; place-items:center; align-content:center; }
 .profile-rating p { margin:0; color:var(--lime); font-size:11px; letter-spacing:.15em; text-transform:uppercase; }
 .profile-rating strong { font-size:clamp(86px,15vw,150px); line-height:.95; }
-.profile-stats { display:grid; grid-template-columns:repeat(4,1fr); border:1px solid var(--line); background:var(--paper); }
+.profile-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border:1px solid var(--line); background:var(--paper); }
 .profile-stats article { min-height:105px; padding:14px; display:flex; flex-direction:column; justify-content:space-between; border-right:1px solid var(--line); }
 .profile-stats article:last-child { border-right:0; }
 .profile-stats span,.profile-stats small { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.08em; }
@@ -275,7 +276,7 @@ body.question-active .focus-question { width:100%; height:100dvh; min-height:0; 
 .compact-result { min-height:calc(100dvh - 56px); padding:16px clamp(14px,5vw,52px) calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; justify-content:center; }
 .compact-result .result-hero { padding:10px 0 24px; }
 .compact-result .result-score { font-size:clamp(82px,15vw,160px); }
-@media (max-width:620px) { .profile-page { align-content:start; padding:14px; } .profile-rating { min-height:150px; } .profile-stats { grid-template-columns:1fr 1fr; } .profile-stats article { min-height:82px; border-bottom:1px solid var(--line); } .profile-links { grid-template-columns:1fr; } .timer-pill span { display:none; } .focus-question { padding-top:12px; } .focus-question form { justify-content:flex-start; } .single-question { padding-top:8px; } .single-question .choice-list { gap:7px; margin-top:12px; } .single-question .choice-list label { min-height:58px; font-size:14px; } .feedback-tools { flex-direction:column; } .learning-panel { max-height:32dvh; } .input-stage { height:44dvh; min-height:270px; } .article-header .tap-guide { margin-top:8px; } .compact-result .result-grid { grid-template-columns:1fr 1fr; } .compact-result .result-stat { min-height:95px; padding:14px; } .compact-result .result-stat strong { font-size:24px; } .compact-result .result-actions { margin-top:14px; } .vocab-card li { grid-template-columns:1fr; gap:4px; } }
+@media (max-width:620px) { .profile-page { align-content:start; padding:14px; } .profile-rating { min-height:150px; } .profile-stats article { min-height:82px; border-bottom:1px solid var(--line); } .profile-links { grid-template-columns:1fr; } .timer-pill span { display:none; } .focus-question { padding-top:12px; } .focus-question form { justify-content:flex-start; } .single-question { padding-top:8px; } .single-question .choice-list { gap:7px; margin-top:12px; } .single-question .choice-list label { min-height:58px; font-size:14px; } .feedback-tools { flex-direction:column; } .learning-panel { max-height:32dvh; } .input-stage { height:44dvh; min-height:270px; } .article-header .tap-guide { margin-top:8px; } .compact-result .result-grid { grid-template-columns:1fr 1fr; } .compact-result .result-stat { min-height:95px; padding:14px; } .compact-result .result-stat strong { font-size:24px; } .compact-result .result-actions { margin-top:14px; } .vocab-card li { grid-template-columns:1fr; gap:4px; } }
 
 .rating-setup { min-height:calc(100dvh - 56px); padding:clamp(22px,6vw,72px); display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
 .rating-setup h1 { margin:8px 0; font-size:clamp(32px,6vw,64px); letter-spacing:-.05em; }
