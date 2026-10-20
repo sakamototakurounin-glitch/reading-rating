@@ -38,8 +38,12 @@ function renderHome() {
 }
 
 function renderRatingSetup() {
-  app.innerHTML=`<section class="rating-setup"><div><p class="eyebrow">FIRST SETUP</p><h1>最初のRatingを選択</h1><p>現在の読解力に近い数値を選んでください。</p></div><div class="rating-options">${RATING.initialOptions.map((rating)=>`<button type="button" data-initial-rating="${rating}">${rating}</button>`).join('')}</div></section>`;
-  app.querySelectorAll('[data-initial-rating]').forEach((button)=>button.onclick=()=>{store.internalRating=Number(button.dataset.initialRating);saveState(store);renderHome();});
+  const options=RATING.initialOptions,min=options[0],max=options[options.length-1],start=options[Math.floor(options.length/2)];
+  const guide=(v)=>v<RATING.anchors.pre1-12.5?'英検2級前後':v<RATING.anchors.pre1+12.5?'英検準1級前後':v<RATING.anchors.eiken1+12.5?'英検1級前後':'英検1級以上';
+  app.innerHTML=`<section class="rating-setup"><div><p class="eyebrow">FIRST SETUP</p><h1>最初のRatingを選択</h1><p>現在の読解力に近い数値を選んでください。</p></div><div class="rating-slider"><output data-rating-value>${start}</output><p data-rating-guide>${guide(start)}</p><input type="range" min="${min}" max="${max}" step="1" value="${start}" data-initial-rating aria-label="最初のRating"><div class="rating-scale"><span>${min}</span><span>${max}</span></div><button type="button" class="primary-button dark" data-confirm-rating>このRatingで始める <span>→</span></button></div></section>`;
+  const input=app.querySelector('[data-initial-rating]');
+  input.oninput=()=>{app.querySelector('[data-rating-value]').textContent=input.value;app.querySelector('[data-rating-guide]').textContent=guide(Number(input.value));};
+  app.querySelector('[data-confirm-rating]').onclick=()=>{store.internalRating=Number(input.value);saveState(store);renderHome();};
 }
 
 async function requestContent(endpoint, payload, fallback, validate=(value)=>value) {
