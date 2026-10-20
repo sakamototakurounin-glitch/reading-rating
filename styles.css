@@ -137,6 +137,7 @@ h1 em { color:#517361; font-family:"Playfair Display",serif; font-weight:600; }
 .answer-review dt { color:var(--muted); }
 .answer-review dd { margin:0; font-weight:600; }
 .answer-review details summary { cursor:pointer; font-weight:700; }
+.answer-review .choice-ja { margin:8px 0 0; padding-left:22px; display:grid; gap:6px; }
 .passage-review { margin-top:18px; border:1px solid var(--line); background:var(--paper); }
 .review-toggle { display:grid; grid-template-columns:1fr 1fr; border-bottom:1px solid var(--line); }
 .review-toggle button { padding:11px; border:0; background:transparent; color:var(--muted); cursor:pointer; font-weight:700; }
