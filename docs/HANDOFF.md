@@ -11,11 +11,15 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - Level 4・5 は再生成中（作成ガイド long_reading_300_creation_guide に基づく）。完成後に L2・L3 と同じ形式（解説なし・設問和訳つき）で差し替える予定。
 - Level 0・1・6〜9 は旧データ（解説あり）。設問和訳は作成済みだが未取り込み。
 - L2・L3 の差し替えで、旧版と同じ ID（L2-001〜010、L3-001〜020）の題は内容が変わった。既存ユーザーの出題履歴上は「出題済み」扱いになる（実害は小さい）。
-- `scripts/import-banks.py` は正解 score=3 を前提にしたまま（新データは 4）。再取り込みに使う場合は要修正。
 - `api/generate-quick.js` / `api/generate-long.js` は 410 で無効化済み（README の方針どおり）。削除するかは未決定。
-- E2E は現在スモークテストのみ（表示・保存保持・横スクロール）。Quick/Long の一連フローは `scripts/check-bank-browser.mjs`（Edge 前提）にある。必要なら Playwright 側へ移植する。
+- E2E はスモークに加え、Level 0/2 のLong採点フロー（20+10=30、要約11→10、和訳の並び）を検証する。Quick の一連フローは `scripts/check-bank-browser.mjs`（Edge 前提）にある。
 
 ## 作業記録
+### 2026-10-20 Codex — Long配点メタデータを4点へ統一（`codex/unify-long-points`）
+- Claudeの更新済みmain（49a7ed8）を確認。Long300題、本文和訳300件、新L2/L3の設問和訳450問を確認。
+- 仕様：実際の採点は従来から4点。今回、旧1050問の正解 `score:3` を4へ統一し、全1500問で一致させた。本文・設問・選択肢・和訳・正解IDは不変。端末履歴も変更しない。
+- 取り込み：旧3点を4点へ正規化し、300題JSON/ZIPにも対応。不正な配点・正解IDは拒否。
+- 検証：単体テスト89件、全文和訳300件、ビルド、Chromiumのスマホ/PC E2E10件成功。E2Eはローカルのみ、採点APIはモック。設問・選択肢の和訳がシャッフル後も一致することを確認。
 ### 2026-10-20 Claude Code — Long Level 2・3 を新90題に差し替え（`claude/long-l2-l3`）
 - `data/banks/long/level-2.json`（40題）・`level-3.json`（50題）を差し替え。解説（rationale）を削除し、設問・選択肢の和訳を追加。
 - `data/translations/long/L2-*.json`・`L3-*.json` を自然な意訳に更新（90件）。manifest を300題に更新。

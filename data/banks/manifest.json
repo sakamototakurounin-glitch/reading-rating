@@ -1,5 +1,5 @@
 {
-  "version": "bank-v1",
+  "version": "bank-v2-four-point",
   "quickPassages": 167,
   "quickQuestions": 501,
   "longPassages": 300,
@@ -21,5 +21,13 @@
     "longJson": "5ff7290352f7a03af360d567c02a31cc1a88e288e62d14c7317381f51a10ef9a"
   },
   "contentRewritten": false,
-  "longLevel2And3": "Astra new90 merged300 (L2: 40, L3: 50), rationale removed, question translations added"
+  "longLevel2And3": "Astra new90 merged300 (L2: 40, L3: 50), rationale removed, question translations added",
+  "longScoring": {
+    "version": "long-30-v1",
+    "pointsPerQuestion": 4,
+    "multipleChoiceMax": 20,
+    "summaryMax": 10,
+    "scoreMax": 30
+  },
+  "normalizedLongSha256": "5f0a6652a2e78626935b1847be07a0ef83b40b3279c15f490ead4433731a1fab"
 }
