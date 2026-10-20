@@ -15,6 +15,10 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - E2E はLong採点（20+10=30、要約11→10、和訳の並び）とQuick Rating・読書時間・旧履歴互換性・リセットを検証する。`scripts/check-bank-browser.mjs` は旧来のAPI再試行などの追加確認用（Edge 前提）。
 
 ## 作業記録
+### 2026-10-20 Claude Code — Quick／Long の見分けやすいデザインと並び順の統一（`claude/mode-design`）
+- 仕様変更：モードの色を統一（Quick＝ライム `--quick`、Long＝濃緑 `--long`）。ホームのカードに「速読／精読」ラベルと1行の内容説明を追加。開始ボタンは従来どおり両方同じデザイン（既存テストのルールを維持）。
+- 仕様変更：プロフィールの Rating・セッション数・履歴ボタンをホームと同じ「Quick → Long」の順に統一。履歴ボタン・履歴ページ見出しにモード色の帯を追加。
+- 変更：`src/app.js`（renderHome・renderProfile・renderHistory）、`styles.css`。npm test 97件・E2E 30件成功、390px で横スクロールなし。
 ### 2026-10-21 Codex — Long/Quick Ratingを同じ大きさで左右表示（`codex/equal-rating-layout`）
 - プロフィール上部を共通スタイルの2列カードに変更。左Long・右Quick、数字・ラベル・カード寸法を揃え、スマホでも横並びを維持。セッション数は下段3列に整理。
 - Rating計算・採点・保存・API・教材は変更なし。`src/app.js` はプロフィール表示部分のみ変更。
