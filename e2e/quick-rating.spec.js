@@ -56,7 +56,7 @@ for(const [rating,correct,after] of [[0,0,0],[10,8,11],[40,9,42],[40,4,37],[60,7
     const stored=await page.evaluate(async()=>{const {getSessions}=await import('/lib/history-db.js');return (await getSessions('quick')).find(r=>r.ratingVersion==='quick-rating-v1');});
     expect(stored).not.toHaveProperty('WPM');expect(stored).not.toHaveProperty('averageWPM');
     await page.locator('.profile-button').click();
-    await expect(page.locator('.profile-stats article').first().locator('strong')).toHaveText(String(after));
+    await expect(page.locator('[data-rating-mode="quick"] strong')).toHaveText(String(after));
     expect(await page.locator('.profile-page').innerText()).not.toMatch(/WPM|NaN|undefined/);
     if(rating===40&&correct===9&&testInfo.project.name==='mobile')await page.screenshot({path:testInfo.outputPath('profile.png')});
     await page.locator('[data-history="quick"]').click();
@@ -69,7 +69,7 @@ for(const [rating,correct,after] of [[0,0,0],[10,8,11],[40,9,42],[40,4,37],[60,7
     await expect(page.locator('.history-detail-page')).toContainText('Rating記録なし');
     expect(await page.locator('.history-detail-page').innerText()).not.toMatch(/WPM|NaN|undefined/);
     await page.reload();await page.locator('.profile-button').click();
-    await expect(page.locator('.profile-stats article').first().locator('strong')).toHaveText(String(after));
+    await expect(page.locator('[data-rating-mode="quick"] strong')).toHaveText(String(after));
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
     expect(errors).toEqual([]);
   });
@@ -96,7 +96,7 @@ test('legacy Long speed stays hidden, independent ratings persist and reset init
     }],quickHistory:[]}));
   },KEY);
   await page.goto('/');await page.locator('.profile-button').click();
-  await expect(page.locator('.profile-stats article').first().locator('strong')).toHaveText('22');
+  await expect(page.locator('[data-rating-mode="quick"] strong')).toHaveText('22');
   for(const width of [375,390,430]){
     await page.setViewportSize({width,height:844});
     expect(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)).toBe(false);
@@ -115,4 +115,32 @@ test('legacy Long speed stays hidden, independent ratings persist and reset init
   const state=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),KEY);
   expect(state.internalRating).toBe(0);expect(state.quickRating).toBe(0);
   expect(state.longHistory).toEqual([]);expect(state.quickHistory).toEqual([]);
+});
+
+test('Long and Quick Rating stay equal-sized and side by side at phone, tablet and desktop widths',async({page},testInfo)=>{
+  await page.route('**/api/**',route=>route.fulfill({status:503,body:'{}'}));
+  await page.addInitScript(key=>{
+    if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({internalRating:100,quickRating:8,longHistory:[],quickHistory:[]}));
+  },KEY);
+  await page.goto('/');await page.locator('.profile-button').click();
+  await expect(page.locator('[data-rating-mode="long"] strong')).toHaveText('100');
+  await expect(page.locator('[data-rating-mode="quick"] strong')).toHaveText('8');
+  for(const width of [375,390,430,768,1280]){
+    await page.setViewportSize({width,height:844});
+    const layout=await page.locator('.profile-ratings').evaluate(element=>{
+      const cards=[...element.querySelectorAll('.profile-rating')].map(card=>{
+        const rect=card.getBoundingClientRect(),number=card.querySelector('strong'),text=number.getBoundingClientRect(),style=getComputedStyle(number);
+        return {x:rect.x,y:rect.y,width:rect.width,height:rect.height,size:style.fontSize,weight:style.fontWeight,textFits:text.left>=rect.left&&text.right<=rect.right};
+      });
+      return {cards,overflow:document.documentElement.scrollWidth>innerWidth};
+    });
+    const [long,quick]=layout.cards;
+    expect(Math.abs(long.width-quick.width)).toBeLessThan(1);
+    expect(Math.abs(long.height-quick.height)).toBeLessThan(1);
+    expect(Math.abs(long.y-quick.y)).toBeLessThan(1);
+    expect(quick.x).toBeGreaterThan(long.x);
+    expect(long.size).toBe(quick.size);expect(long.weight).toBe(quick.weight);
+    expect(long.textFits&&quick.textFits).toBe(true);expect(layout.overflow).toBe(false);
+    if((testInfo.project.name==='mobile'&&width===390)||(testInfo.project.name==='desktop'&&width===1280))await page.screenshot({path:testInfo.outputPath(`equal-ratings-${width}.png`)});
+  }
 });

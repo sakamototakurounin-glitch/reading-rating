@@ -25,6 +25,13 @@ test('iPad vocabulary lists use two entries per row without changing the phone b
 test('top screen uses compact modes and profile instead of rating hero',()=>{
   assert.match(app,/compact-home/); assert.doesNotMatch(app,/rating-orbit/); assert.match(html,/profile-button/);
 });
+
+test('profile gives Long and Quick the same rating-card style in a two-column row',()=>{
+  assert.match(app,/class="profile-ratings"/);
+  assert.match(app,/class="profile-rating" data-rating-mode="long"/);
+  assert.match(app,/class="profile-rating" data-rating-mode="quick"/);
+  assert.match(styles,/\.profile-ratings \{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
 test('top screen removes numbering and extra mode copy while using the same start-button design',()=>{
   const home=app.slice(app.indexOf('function renderHome()'),app.indexOf('function renderRatingSetup()'));
   assert.doesNotMatch(home,/mode-number|mode-kicker|3 Passages|Summary/); assert.equal((home.match(/primary-button dark/g)||[]).length,2);
