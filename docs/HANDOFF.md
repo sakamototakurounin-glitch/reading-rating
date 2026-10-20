@@ -5,7 +5,7 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 ## 作業中（同時編集防止）
 | 担当AI | ブランチ | 編集予定ファイル | 開始日 |
 |---|---|---|---|
-| （なし） | | | |
+| Claude Code | `claude/long-l2-l3` | data/banks/long/level-2.json, level-3.json, data/banks/manifest.json, data/translations/long/L2-*, L3-*, lib/question-bank.js, src/app.js, styles.css, tests/question-bank.test.js | 2026-10-20 |
 
 ## 未解決の問題
 - `api/generate-quick.js` / `api/generate-long.js` は 410 で無効化済み（README の方針どおり）。削除するかは未決定。
