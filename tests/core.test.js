@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { passageRating, userLevel, expectedAccuracy, updateRating, updateRatingWithCalibration, displayRating } from '../lib/rating.js';
 import { candidateDifficulties, selectDifficulty } from '../lib/difficulty.js';
-import { nextTimeLimit } from '../lib/quick.js';
+import { quickReadingLimitSeconds } from '../lib/quick.js';
 import { QUESTION_LIMITS, assertFourChoiceQuestions, longReadingLimitSeconds, questionPassageDependency, validateLongContent, validateQuickSet } from '../lib/assessment.js';
 import { buildDifficultyProfile } from '../lib/difficulty-profile.js';
 import { PASSAGE_HISTORY_LIMIT, addPassagesToHistory, isTooSimilar, passageRecord, similarityScore } from '../lib/passage-history.js';
@@ -16,7 +16,7 @@ test('expected accuracy follows target curve',()=>{ const close=(a,b)=>assert.ok
 test('rating delta is clamped and internal value may exceed 100',()=>{ assert.equal(updateRating(50,1,0).delta,2.5); assert.equal(updateRating(50,0,1).delta,-2.5); assert.ok(updateRating(100,1,.8).newRating>100); assert.equal(displayRating(103.7),100); });
 test('all Long sessions use normal rating movement from the first session',()=>{ for(const count of [0,1,2,3,100])for(const [actual,expected] of [[1,0],[0,1],[.6,.5]]){const result=updateRatingWithCalibration(50,actual,expected,count);assert.equal(result.multiplier,1);assert.deepEqual({delta:result.delta,newRating:result.newRating},updateRating(50,actual,expected));}assert.equal(RATING.calibrationSessions,0); });
 test('initial Rating includes 70 and 80 without bypassing normal level selection',()=>{ assert.ok(RATING.initialOptions.includes(70)); assert.ok(RATING.initialOptions.includes(80)); assert.equal(userLevel(70),14); assert.equal(userLevel(80),16); assert.ok(candidateDifficulties(70).every((value)=>value>=0&&value<=17)); assert.ok(candidateDifficulties(80).every((value)=>value>=0&&value<=17)); });
-test('quick time adjustments are centralized and bounded',()=>{ assert.equal(nextTimeLimit(120,9),105); assert.equal(nextTimeLimit(120,8),110); assert.equal(nextTimeLimit(120,7),120); assert.equal(nextTimeLimit(120,6),130); assert.equal(nextTimeLimit(120,5),140); assert.equal(nextTimeLimit(45,9),45); });
+test('Quick reading deadline comes from word count and its independent Rating',()=>{assert.equal(quickReadingLimitSeconds(200,40),100);assert.equal(quickReadingLimitSeconds(200,80),50);assert.equal(quickReadingLimitSeconds(200,0),400);});
 test('question limits are 60 seconds for Quick and 120 for Long',()=>{ assert.deepEqual(QUESTION_LIMITS,{quick:60,long:120}); });
 test('Long reading time uses WPM 60 and rounds to 30 seconds',()=>{ assert.equal(longReadingLimitSeconds('word '.repeat(800)),810); assert.equal(longReadingLimitSeconds('word '.repeat(925)),930); assert.equal(longReadingLimitSeconds('word '.repeat(1010)),1020);assert.equal(longReadingLimitSeconds('word '.repeat(600)),600); });
 test('legacy question validation rejects non-four-choice content',()=>{assert.throws(()=>assertFourChoiceQuestions([{choices:['a','b','c'],answer:0,explanation:'x',evidence:'y'}],1),/four choices/);});

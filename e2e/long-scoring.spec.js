@@ -35,6 +35,9 @@ for(const level of [0,2])test(`Level ${level}: five correct answers score20, sum
   await expect(page.locator('.result-page')).toBeVisible();
   const record=await page.evaluate(()=>JSON.parse(localStorage.getItem('reading-rating-state-v1')).longHistory[0]);
   expect(record.multipleChoiceScore).toBe(20);expect(record.rawSummaryScore).toBe(11);expect(record.summaryScore).toBe(10);expect(record.totalScore).toBe(30);expect(record.scoreMax).toBe(30);
+  expect(record).not.toHaveProperty('WPM');expect(record).not.toHaveProperty('averageWPM');
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('reading-rating-state-v1')).quickRating)).toBe(level*10);
+  expect(await page.locator('.result-page').innerText()).not.toMatch(/WPM/);
   await page.getByText('選択問題・本文を復習',{exact:true}).click();
   await page.locator('.review-content > details > summary').click();
   if(firstJapanese){

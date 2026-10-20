@@ -46,7 +46,7 @@ test('generation is retired without affecting handwriting or vocabulary APIs',()
 test('timed questions confirm with next and defer correctness and explanations to results',()=>{
   assert.match(app,/QUESTION_LIMITS\.quick/); assert.match(app,/QUESTION_LIMITS\.long/); assert.match(app,/data-confirm disabled/); assert.match(app,/confirm\.onclick=\(\)=>settle/); assert.match(app,/answer-review/); assert.match(app,/解説を見る/);
 });
-test('Long has WPM50 reading limit, concrete vocabulary, and structured summary feedback',()=>{
+test('Long keeps its reading limit, concrete vocabulary, and structured summary feedback',()=>{
   assert.match(app,/longReadingLimitSeconds/); assert.match(app,/resolveUnknownWords/); assert.match(app,/contextMeaning/); assert.match(gradeApi,/goodPoints/); assert.match(gradeApi,/missingPoints/); assert.match(gradeApi,/modelSummary/);
 });
 test('question timer starts after paint, uses a deadline, and stops only on confirmation or timeout',()=>{ assert.match(app,/requestAnimationFrame\(\(\)=>requestAnimationFrame/); assert.match(app,/deadlineTimestamp=startTimestamp\+duration\*1000/); assert.match(app,/deadlineTimestamp-Date\.now\(\)/); assert.match(app,/selectedIndex=Number\(input\.value\);confirm\.disabled=false/); assert.doesNotMatch(app,/addEventListener\('change',\(\)=>settle/); assert.match(app,/if\(remainingTime<=0\)settle\(selectedIndex,true\)/); assert.match(app,/activeQuestionTimerCancel/); });
@@ -66,4 +66,11 @@ test('Quick selects three passages once and Long has no question generation requ
 test('version 2.1 is visible and package version is aligned',()=>{ assert.match(html,/ver 2\.1/); assert.match(app,/VER 2\.1/); assert.equal(packageJson.version,'2.1.0'); });
 test('summary grading uses six elements, integer capped scoring, and a 250–300 character exemplar',()=>{ assert.match(gradeApi,/minItems:6,maxItems:6/); assert.match(gradeApi,/impressionScore/); assert.match(gradeApi,/A list of remembered details is not a good summary/); assert.match(app,/normalizeSummaryGrade/); assert.match(app,/summaryElementScore/); assert.match(app,/summaryImpressionScore/); assert.match(app,/rawSummaryScore/); assert.match(app,/scoreLong\(mcCorrect,grade\.rawScore\)/); assert.match(gradeApi,/250–300 Japanese characters/);assert.match(app,/scoreMax:LONG_SCORING.scoreMax/); });
 test('reading columns use wider compact layouts',()=>{ assert.match(styles,/\.quick-reading \{[^}]*max-width:1180px/); assert.match(styles,/\.long-copy \{[^}]*max-width:1040px/); assert.match(styles,/\.focus-question,.summary-page \{[^}]*max-width:1080px/); });
-test('Quick accuracy adjustment is based on recent history and reading-only time',()=>{assert.match(app,/nextRecentTimeLimit\(session\.limit, correct, store\.quickHistory\)/);assert.match(app,/session\.readingTimes\[i\]/);});
+test('Quick Rating updates once from this session and does not update Long Rating',()=>{
+  const result=app.slice(app.indexOf('function renderQuickResult()'),app.indexOf('async function startLong()'));
+  assert.match(result,/updateQuickRating\(session\.ratingBefore,correct\)/);
+  assert.match(result,/store\.quickRating=ratingUpdate\.newRating/);
+  assert.match(result,/if\(session\.committed\)return/);
+  assert.doesNotMatch(result,/store\.internalRating\s*=|nextRecentTimeLimit|nextTimeLimit/);
+});
+test('measured WPM is neither calculated, recorded nor rendered in either mode',()=>{assert.doesNotMatch(app,/WPM|Wpm|wpm|calculateWpm/);assert.doesNotMatch(app,/quickTimeLimit|nextRecentTimeLimit/);assert.match(app,/readingLimits/);assert.match(app,/Quick Rating/);});

@@ -2,13 +2,15 @@
 
 英語読解を「速さ」と「深さ」の2軸で継続的にトレーニングする独立Webアプリです。
 
-- **Quick**: 指定の167本文・501問から約200語 × 3本、全9問。直近3セッションの正答率で制限時間を調整します。末尾の2本文も次セットへ繰り越して消費します。
+- **Quick**: 指定の167本文・501問から約200語 × 3本、全9問。Longとは独立したQuick Ratingで読書時間を設定します。目標速度は `max(10, Quick Rating) × 3` 語/分、各本文の制限秒数は `ceil(語数 × 60 / 目標速度)`。Rating 10以下でも実際のRatingは変更せず、時間計算だけ10として扱います。9/8/7/6/5問正解はそれぞれ +2/+1/0/−1/−2、4問以下は−3（下限0、内部値はLong同様100を超えて保持、表示は100まで）。直近成績の平均や旧45〜300秒制限は使用しません。末尾の2本文も次セットへ繰り越して消費します。
 - **Long**: 指定の300本文・1500問（Level 0〜9。Level 2は40本文、Level 3は50本文）。内部Ratingから `round(clamp(rating,0,100)/10 + uniform(-1,1))` を新規開始時に1回だけ抽選。各レベルの未出題本文を優先します。
-- 未知語タップ、Vocabstar用コピー、WPM、履歴保存に対応しています。
+- 未知語タップ、Vocabstar用コピー、履歴保存に対応しています。Long/Quickとも実測WPMの表示・計算・新規記録は廃止しました。既存のWPMデータは履歴内に保持しますが表示しません。
+
+初回のスライダーで選んだRatingをLong/Quick共通の初期値にし、以後は別々に更新します。既存端末ではQuick Ratingが未設定の場合だけ、その時点のLong Ratingを初期値に移行します。旧Quick履歴の再採点はせず、Ratingのない旧履歴は「Rating記録なし」と表示します。Reading timeは保持し、Longの読書時間や採点ロジック、選択問題の60秒/120秒制限は変更しません。
 
 ## Local
 
-静的ファイルは任意のHTTPサーバーで起動できます。`npm test` でRating・Difficulty・Quick時間更新ロジックを検証できます。
+静的ファイルは任意のHTTPサーバーで起動できます。`npm test` でRating・Difficulty・Quick Ratingと読書時間・旧履歴の互換性を検証できます。
 
 ## Vercel / OpenAI
 
@@ -27,7 +29,7 @@ Longは選択問題5問×4点＋要約10点＝30点満点です。要約は内�
 - `lib/config.js`: 調整可能な定数
 - `lib/rating.js`: Rating計算
 - `lib/question-bank.js`: 固定バンク読込、IDベースの選択肢シャッフル、デッキとLongレベル抽選
-- `lib/quick.js`: WPMと制限時間更新
+- `lib/quick.js`: Quick Rating更新と語数に応じた読書時間計算
 - `lib/storage.js`: localStorage永続化
 - `api/`: Vercel Serverless Functions
 - `data/banks/`: 今回指定された問題集のみ（LongはLevel別に分割）

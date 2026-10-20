@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { adaptQuick, adaptLong, chooseLongLevel, takeBankItems, loadBank, isCorrectAnswer } from '../lib/question-bank.js';
-import { nextRecentTimeLimit } from '../lib/quick.js';
+import { quickReadingLimitSeconds } from '../lib/quick.js';
 import quickHandler from '../api/generate-quick.js';
 import longHandler from '../api/generate-long.js';
 import { LONG_SCORING, scoreLong } from '../lib/long-scoring.js';
@@ -47,5 +47,5 @@ test('bank loading caches concurrent requests and retries errors without AI',asy
   const [a,b]=await Promise.all([loadBank('long',2,fetcher),loadBank('long',2,fetcher)]);assert.equal(calls,1);assert.equal(a,b);
   await assert.rejects(loadBank('long',1,async()=>({ok:false})));assert.equal((await loadBank('long',1,async()=>({ok:true,json:async()=>({items:levels[1]})}))).length,10);
 });
-test('Quick keeps existing bounds and adjustments but uses the latest three accuracy results',()=>{assert.equal(nextRecentTimeLimit(120,9,[{correctAnswers:5},{correctAnswers:7}]),120);assert.equal(nextRecentTimeLimit(120,9,[]),105);assert.equal(nextRecentTimeLimit(45,9,[{correctAnswers:9}]),45);});
+test('every Quick bank passage supports Rating-based reading limits without changing the bank',()=>{for(const p of quick)for(const r of [0,10,40,80,100])assert.equal(quickReadingLimitSeconds(p.difficulty.word_count,r),Math.ceil(p.difficulty.word_count*60/(Math.max(10,r)*3)));});
 test('retired generation endpoints return410 and cannot make an AI request',async()=>{const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;throw Error('must not call');};try{for(const handler of [quickHandler,longHandler]){let status;let payload;const response={status(v){status=v;return this;},setHeader(){return this;},send(v){payload=JSON.parse(v);}};await handler({method:'POST',body:{}},response);assert.equal(status,410);assert.equal(payload.passage,undefined);}assert.equal(calls,0);}finally{globalThis.fetch=original;}});
