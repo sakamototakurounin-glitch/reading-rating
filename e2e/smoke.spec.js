@@ -50,3 +50,26 @@ test('初回はスライドバーでRatingを選べる', async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test('プロフィールにセッション数はなく、Rating推移ボタンで推移が見える', async ({ page }) => {
+  const rec = (date, b, a) => ({ id: date, date, displayRatingBefore: b, displayRatingAfter: a, internalRatingBefore: b, internalRatingAfter: a, passageDifficulty: 3, totalScore: 20, passages: [], answers: [], questions: [] });
+  const state = {
+    internalRating: 45, quickRating: 33, passageHistory: [],
+    quickHistory: [rec('2026-10-02T00:00:00.000Z', 30, 33), rec('2026-10-01T00:00:00.000Z', 28, 30)],
+    longHistory: [rec('2026-10-03T00:00:00.000Z', 40, 45)],
+  };
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [KEY, JSON.stringify(state)]);
+  await page.goto('/');
+  await page.locator('.profile-button').click();
+  await expect(page.locator('.profile-ratings')).toBeVisible();
+  await expect(page.getByText('sessions', { exact: false })).toHaveCount(0);
+  await page.locator('[data-trend]').click();
+  await expect(page.getByRole('heading', { name: 'レーティングの推移' })).toBeVisible();
+  await expect(page.locator('.trend-chart')).toBeVisible();
+  await expect(page.locator('.trend-quick .trend-dot')).toHaveCount(3);
+  await expect(page.locator('.trend-long .trend-dot')).toHaveCount(2);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+  await page.locator('[data-profile]').click();
+  await expect(page.locator('.profile-ratings')).toBeVisible();
+});

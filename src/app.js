@@ -4,6 +4,7 @@ import { RATING } from '../lib/config.js';
 import { quickReadingLimitSeconds, updateQuickRating } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds } from '../lib/assessment.js';
 import { loadLongTranslation } from '../lib/translation.js';
+import { buildTrend } from '../lib/rating-trend.js';
 import { LONG_SCORING, scoreLong, longScoreMax, longChoiceMax } from '../lib/long-scoring.js';
 import { addPassagesToHistory } from '../lib/passage-history.js';
 import { createLongGenerationContext, createQuickGenerationContext } from '../lib/generation.js';
@@ -339,8 +340,8 @@ function renderLoading(title,detail) { app.innerHTML=`<section class="loading-vi
 function renderProfile() {
   activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
   const quick=store.quickHistory; const long=store.longHistory;
-  app.innerHTML=`<section class="profile-page"><div class="profile-ratings" aria-label="モード別Rating"><div class="profile-rating" data-rating-mode="quick"><p>Quick Rating</p><strong>${displayRating(store.quickRating)}</strong></div><div class="profile-rating" data-rating-mode="long"><p>Long Rating</p><strong>${displayRating(store.internalRating)}</strong>${long.length<RATING.calibrationSessions?`<small>初回調整 ${long.length}/${RATING.calibrationSessions}</small>`:''}</div></div><div class="profile-stats"><article><span>Quick</span><strong>${quick.length}</strong><small>sessions</small></article><article><span>Long</span><strong>${long.length}</strong><small>sessions</small></article><article><span>Total</span><strong>${long.length+quick.length}</strong><small>sessions</small></article></div><div class="profile-links"><button class="primary-button" data-history="quick" data-mode="quick">Quick 履歴 <span>→</span></button><button class="primary-button" data-history="long" data-mode="long">Long 履歴 <span>→</span></button></div><details class="settings-panel"><summary>設定</summary><div class="settings-content"><div><strong>最初から始める</strong><p>履歴とRatingを削除し、初期Ratingの選択に戻ります。</p></div><button type="button" class="danger-button" data-reset>最初から</button><div class="reset-confirm" hidden><p>すべての学習データを削除します。元に戻せません。</p><button type="button" data-cancel-reset>キャンセル</button><button type="button" class="danger-button" data-confirm-reset>削除して最初から</button></div></div></details><button class="text-button profile-home" data-home>← ホーム</button></section>`;
-  app.querySelectorAll('[data-history]').forEach((button)=>button.onclick=()=>renderHistory(button.dataset.history)); app.querySelector('[data-home]').onclick=renderHome;
+  app.innerHTML=`<section class="profile-page"><div class="profile-ratings" aria-label="モード別Rating"><div class="profile-rating" data-rating-mode="quick"><p>Quick Rating</p><strong>${displayRating(store.quickRating)}</strong></div><div class="profile-rating" data-rating-mode="long"><p>Long Rating</p><strong>${displayRating(store.internalRating)}</strong>${long.length<RATING.calibrationSessions?`<small>初回調整 ${long.length}/${RATING.calibrationSessions}</small>`:''}</div></div><button class="primary-button trend-button" data-trend>レーティングの推移 <span>→</span></button><div class="profile-links"><button class="primary-button" data-history="quick" data-mode="quick">Quick 履歴 <span>→</span></button><button class="primary-button" data-history="long" data-mode="long">Long 履歴 <span>→</span></button></div><details class="settings-panel"><summary>設定</summary><div class="settings-content"><div><strong>最初から始める</strong><p>履歴とRatingを削除し、初期Ratingの選択に戻ります。</p></div><button type="button" class="danger-button" data-reset>最初から</button><div class="reset-confirm" hidden><p>すべての学習データを削除します。元に戻せません。</p><button type="button" data-cancel-reset>キャンセル</button><button type="button" class="danger-button" data-confirm-reset>削除して最初から</button></div></div></details><button class="text-button profile-home" data-home>← ホーム</button></section>`;
+  app.querySelectorAll('[data-history]').forEach((button)=>button.onclick=()=>renderHistory(button.dataset.history)); app.querySelector('[data-trend]').onclick=renderTrend; app.querySelector('[data-home]').onclick=renderHome;
   const confirm=app.querySelector('.reset-confirm'); app.querySelector('[data-reset]').onclick=()=>{confirm.hidden=false;}; app.querySelector('[data-cancel-reset]').onclick=()=>{confirm.hidden=true;}; app.querySelector('[data-confirm-reset]').onclick=()=>{resetState(); void clearSessions(); localStorage.removeItem('reading-rating-input-mode');store={...defaultState,longHistory:[],quickHistory:[]};renderRatingSetup();};
   if(!historyHydrated){ historyHydrated=true; void hydrateHistory(store).then((next)=>{ if(next.longHistory!==store.longHistory||next.quickHistory!==store.quickHistory){store={...store,longHistory:next.longHistory,quickHistory:next.quickHistory};saveState(store);if(app.querySelector('.profile-page'))renderProfile();} }); }
 }
@@ -350,6 +351,27 @@ function historyRatingText(record) {
     ? `Rating ${record.displayRatingBefore} → ${record.displayRatingAfter}` : 'Rating記録なし';
 }
 
+function renderTrend() {
+  activeQuestionTimerCancel(); activeQuestionTimerCancel=()=>{};
+  const trend=buildTrend(store.quickHistory,store.longHistory);
+  const W=340,H=230,L=34,R=14,T=14,B=30,x0=L,x1=W-R,y0=H-B,y1=T;
+  const fmt=(t)=>{const d=new Date(t);return `${d.getMonth()+1}/${d.getDate()}`;};
+  let chart='';
+  if(trend.empty){chart='<p class="empty-row">まだ記録がありません。セッションを終えると、ここにRatingの推移が表示されます。</p>';}
+  else{
+    const span=trend.tMax-trend.tMin,sx=(t)=>span?x0+(t-trend.tMin)/span*(x1-x0):(x0+x1)/2,sy=(v)=>y0-(v-trend.yMin)/(trend.yMax-trend.yMin)*(y0-y1);
+    const grid=[trend.yMin,(trend.yMin+trend.yMax)/2,trend.yMax].map((v)=>`<line x1="${x0}" x2="${x1}" y1="${sy(v)}" y2="${sy(v)}" class="trend-grid"/><text x="${x0-6}" y="${sy(v)+4}" text-anchor="end" class="trend-label">${Math.round(v)}</text>`).join('');
+    const line=(mode)=>{const pts=trend.series[mode];if(!pts.length)return '';const path=pts.map((p)=>`${sx(p.t).toFixed(1)},${sy(p.rating).toFixed(1)}`).join(' ');
+      const dots=pts.map((p)=>mode==='quick'?`<circle cx="${sx(p.t).toFixed(1)}" cy="${sy(p.rating).toFixed(1)}" r="4.5" class="trend-dot"/>`:`<rect x="${(sx(p.t)-4).toFixed(1)}" y="${(sy(p.rating)-4).toFixed(1)}" width="8" height="8" class="trend-dot"/>`).join('');
+      return `<g class="trend-${mode}">${pts.length>1?`<polyline points="${path}" class="trend-line"/>`:''}${dots}</g>`;};
+    const last=(mode)=>{const pts=trend.series[mode];return pts.length?pts[pts.length-1].rating:'—';};
+    const count=(mode)=>Math.max(0,trend.series[mode].length-1);
+    chart=`<div class="trend-legend"><span class="trend-key trend-quick"><i></i>Quick <b>${last('quick')}</b><small>${count('quick')}回</small></span><span class="trend-key trend-long"><i></i>Long <b>${last('long')}</b><small>${count('long')}回</small></span></div>
+      <svg class="trend-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Ratingの推移。Quick ${last('quick')}、Long ${last('long')}">${grid}<text x="${x0}" y="${H-8}" class="trend-label">${fmt(trend.tMin)}</text><text x="${x1}" y="${H-8}" text-anchor="end" class="trend-label">${fmt(trend.tMax)}</text>${line('quick')}${line('long')}</svg>`;
+  }
+  app.innerHTML=`<section class="history-page compact-history trend-page"><header><p class="eyebrow">RATING TREND</p><h1>レーティングの推移</h1><p>セッションごとのRatingの変化です（表示値）。</p></header>${chart}<button class="text-button" data-profile>← プロフィール</button></section>`;
+  app.querySelector('[data-profile]').onclick=renderProfile;
+}
 function renderHistory(filter='all') {
   const items=[]; if(filter!=='quick')store.longHistory.forEach((r,i)=>items.push({mode:'long',record:r,index:i})); if(filter!=='long')store.quickHistory.forEach((r,i)=>items.push({mode:'quick',record:r,index:i}));
   const rows=items.map(({mode,record,index})=>`<tr><td><button class="history-row" data-history-detail="${mode}" data-history-index="${index}"><span>${new Date(record.date).toLocaleDateString('ja-JP')}</span><span>${mode==='long'?`Long · Level ${record.passageDifficulty} · ${record.totalScore}/${longScoreMax(record)}`:`Quick · ${record.correctAnswers}/9`} · ${historyRatingText(record)}</span></button></td><td><button type="button" class="text-button history-delete" data-history-delete="${mode}" data-history-index="${index}">削除</button></td></tr>`).join('')||'<tr><td colspan="2" class="empty-row">履歴はまだありません。</td></tr>';

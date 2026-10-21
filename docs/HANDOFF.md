@@ -15,6 +15,10 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - E2E はLong採点（20+10=30、要約11→10、和訳の並び）とQuick Rating・読書時間・旧履歴互換性・リセットを検証する。`scripts/check-bank-browser.mjs` は旧来のAPI再試行などの追加確認用（Edge 前提）。
 
 ## 作業記録
+### 2026-10-21 Claude Code — プロフィールのセッション数を削除し、Rating推移ボタンに置換（`claude/rating-trend`）
+- 仕様変更：プロフィール画面の Quick／Long／Total のセッション数タイルを削除。代わりに「レーティングの推移」ボタンを追加。押すと Quick（丸・ライム）と Long（四角・濃緑）の表示 Rating の推移を折れ線グラフ（SVG）で表示。履歴の保存形式は変更なし（`displayRatingBefore/After` と `date` を読み取るだけ）。記録のない旧履歴は無視。
+- 追加：`lib/rating-trend.js`（データ作り）、`tests/rating-trend.test.js`、E2E 1件。変更：`src/app.js`（renderProfile・renderTrend）、`styles.css`。npm test 101件・E2E 32件成功、390px で横スクロールなし。
+- 履歴一覧（Quick／Long 履歴）の見出し「Session」は変更していない。
 ### 2026-10-20 Claude Code — Quick／Long の見分けやすいデザインと並び順の統一（`claude/mode-design`）
 - 仕様変更：モードの色を統一（Quick＝ライム `--quick`、Long＝濃緑 `--long`）。ホームのカードに「速読／精読」ラベルと1行の内容説明を追加。開始ボタンは従来どおり両方同じデザイン（既存テストのルールを維持）。
 - 仕様変更：プロフィールの Rating・セッション数・履歴ボタンをホームと同じ「Quick → Long」の順に統一。履歴ボタン・履歴ページ見出しにモード色の帯を追加。
