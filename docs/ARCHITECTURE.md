@@ -26,6 +26,7 @@
 - Long/Quick の実測WPMは計算・表示・新規保存しない。旧履歴の速度フィールドは削除せず、画面だけ非表示にする。読書時間は保持し、Long の60語/分基準の読書制限・採点は変更しない。
 - 教材全1500問の正解 `score` も4点、誤答は0点。`scripts/long_bank_format.py` が取り込み時に旧3点の正解メタデータを4点へ変換する。本文・設問・和訳・正解IDは保持し、不正な正解IDや部分点は拒否する。manifest の `longScoring` と実採点の一致をテストする。
 - Long 全レベルで解説（rationale）なし（2026-10。L2・L3 は新版、L4・L5 は作成ガイドに基づき全文再生成、その他は英文そのままで解説を和訳に置換）。設問・選択肢の和訳（`stem_ja`・`choices[].text_ja`）を持ち、`adaptLong` が `promptJa`・`choicesJa` に変換して結果画面に表示する。和訳がない問題は従来の解説を表示。
+- Quick（2026-11）も本文和訳（`data/translations/quick/QR###.json`）と設問・選択肢の和訳（`prompt_ja`・`options[].text_ja`）を持ち、結果画面は解説の代わりに和訳を表示。未知語は3本の本文ごとに選択し（`session.quickVocab`）、結果画面で本文ごとに `/api/lookup-words` で意味を取得して記録に保存。
 - 詳細仕様は README.md / BANK_INTEGRATION_REPORT.md / TRANSLATION_SCORING_RELEASE.md
 
 ## テスト
