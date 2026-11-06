@@ -10,7 +10,7 @@ test('Quick: 未知語をタップで記録し、結果で意味を表示・保�
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const lookups=[];
   await page.route('**/api/lookup-words',async route=>{const body=route.request().postDataJSON();lookups.push(body);
-    await route.fulfill({contentType:'application/json',body:JSON.stringify(body.words.map(word=>({word,generalMeaning:'テストの意味',exampleSentence:`Example with ${word}.`})))});});
+    await route.fulfill({contentType:'application/json',body:JSON.stringify(body.words.map(word=>({word,generalMeaning:'配分',meaningFormat:'short-ja-v2',exampleSentence:`Example with ${word}.`})))});});
   await page.route('**/api/**',route=>route.request().url().includes('lookup-words')?route.fallback():route.fulfill({status:503,body:'{}'}));
   await page.addInitScript(({key,ids})=>{if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({internalRating:40,quickRating:40,quickHistory:[],longHistory:[],passageHistory:[],bankProgress:{quick:{remaining:ids}}}));},{key:KEY,ids:bank.slice(0,3).map(p=>p.id)});
   await page.goto('/');await page.locator('[data-start="quick"]').click();
@@ -32,7 +32,7 @@ test('Quick: 未知語をタップで記録し、結果で意味を表示・保�
   await expect(page.locator('.result-page')).toBeVisible();
   const card=page.locator('.vocab-card');
   await expect(card.locator('li')).toHaveCount(marked.length);
-  await expect(card).toContainText('テストの意味');
+  await expect(card).toContainText('配分');await expect(card).not.toContainText('取得できませんでした');
   await expect(card.locator('[data-copy-3]')).toBeEnabled();
   expect(lookups.length).toBe(2);expect(lookups[0].passage).toBe(bank[0].passage);expect(lookups[1].passage).toBe(bank[1].passage);
   const state=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),KEY);

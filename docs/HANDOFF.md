@@ -5,7 +5,7 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 ## 作業中（同時編集防止）
 | 担当AI | ブランチ | 編集予定ファイル | 開始日 |
 |---|---|---|---|
-| Claude Code | `claude/quick-ja-vocab` | data/banks/quick.json, data/translations/quick/*, lib/question-bank.js, lib/translation.js, src/app.js, styles.css, tests/, e2e/ | 2026-11-06 |
+| （なし） | | | |
 
 ## 未解決の問題
 - L0・L1・L6〜L9 の設問和訳は Sonnet で作成（抜き取りで意味の逆転 1 件を修正済み、全件の精査は未実施）。
@@ -15,6 +15,11 @@ Claude Code / Codex のどちらも、作業開始時にこのファイルを読
 - E2E はLong採点（20+10=30、要約11→10、和訳の並び）とQuick Rating・読書時間・旧履歴互換性・リセットを検証する。`scripts/check-bank-browser.mjs` は旧来のAPI再試行などの追加確認用（Edge 前提）。
 
 ## 作業記録
+### 2026-11-06 Claude Code — Quick に和訳と未知語マークを追加（`claude/quick-ja-vocab`）
+- データ：Quick 167本の本文和訳を `data/translations/quick/` に追加、`quick.json` の各設問に `prompt_ja`・`options[].text_ja` を追加（英文・正解・解説は変更なし）。翻訳は Sonnet、意味の誤りの確認と修正（15か所）は Opus。
+- 仕様変更：Quick の結果画面も解説の代わりに「和訳を見る」と本文の「和訳」タブを表示。見出しは「回答・和訳・本文を復習」。
+- 仕様変更：Quick の読書画面で単語をタップして未知語を記録（Long と同じ仕組みを本文ごとに使用）。結果画面で意味を取得し「今回の未知語」として表示・保存・Vocabstar 用コピー。履歴詳細にも表示。
+- テスト：tests/quick-translation.test.js、e2e/quick-vocab.spec.js を追加。npm test 104件・E2E 34件成功、390px で確認。
 ### 2026-10-21 Claude Code — プロフィールのセッション数を削除し、Rating推移ボタンに置換（`claude/rating-trend`）
 - 仕様変更：プロフィール画面の Quick／Long／Total のセッション数タイルを削除。代わりに「レーティングの推移」ボタンを追加。押すと Quick（丸・ライム）と Long（四角・濃緑）の表示 Rating の推移を折れ線グラフ（SVG）で表示。履歴の保存形式は変更なし（`displayRatingBefore/After` と `date` を読み取るだけ）。記録のない旧履歴は無視。
 - 追加：`lib/rating-trend.js`（データ作り）、`tests/rating-trend.test.js`、E2E 1件。変更：`src/app.js`（renderProfile・renderTrend）、`styles.css`。npm test 101件・E2E 32件成功、390px で横スクロールなし。
