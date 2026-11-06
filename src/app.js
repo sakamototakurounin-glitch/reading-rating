@@ -3,7 +3,7 @@ import { displayRating, expectedAccuracy, passageRating, updateRatingWithCalibra
 import { RATING } from '../lib/config.js';
 import { quickReadingLimitSeconds, updateQuickRating } from '../lib/quick.js';
 import { QUESTION_LIMITS, longReadingLimitSeconds } from '../lib/assessment.js';
-import { loadLongTranslation } from '../lib/translation.js';
+import { loadLongTranslation, isBankTranslationId } from '../lib/translation.js';
 import { buildTrend } from '../lib/rating-trend.js';
 import { LONG_SCORING, scoreLong, longScoreMax, longChoiceMax } from '../lib/long-scoring.js';
 import { addPassagesToHistory } from '../lib/passage-history.js';
@@ -65,7 +65,8 @@ async function startQuick() {
   store.passageHistory=addPassagesToHistory(store.passageHistory,passages,'quick'); saveState(store);
   const ratingBefore=store.quickRating;
   const readingLimits=passages.map(p=>quickReadingLimitSeconds(p.wordCount||p.passage.trim().split(/\s+/).length,ratingBefore));
-  session = { mode:'quick', ...context, passages, passageIndex:0, answers:[], readingTimes:[], readingLimits, ratingBefore, phase:'ready' };
+  const quickVocab=passages.map(p=>({content:{passage:p.passage},selectedTokenIndices:new Set(),unknownWords:new Map(),expressionsResolved:false}));
+  session = { mode:'quick', ...context, passages, passageIndex:0, answers:[], readingTimes:[], readingLimits, ratingBefore, quickVocab, phase:'ready' };
   renderReadingReady();
   } catch {
     if(session?.sessionId!==context.sessionId)return;
@@ -86,9 +87,11 @@ function renderReadingReady() {
 
 function renderQuickReading() {
   const item = session.passages[session.passageIndex]; session.limit=session.readingLimits[session.passageIndex]; session.startedAt = nowSeconds();
-  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">QUICK ${session.passageIndex + 1} / 3</div><div class="timer-pill"><span>TIME</span><b id="timer">${fmtTime(session.limit)}</b></div></section><article class="quick-reading"><p class="eyebrow">${escapeHtml(item.topic)}</p><div class="passage-scroll"><p class="passage-text">${escapeHtml(item.passage)}</p></div><div class="sticky-action"><button class="primary-button dark" data-finish>問題へ <span>→</span></button></div></article>`;
+  app.innerHTML = `<section class="session-head"><button class="text-button" data-home>← 終了</button><div class="progress-label">QUICK ${session.passageIndex + 1} / 3</div><div class="timer-pill"><span>TIME</span><b id="timer">${fmtTime(session.limit)}</b></div></section><article class="quick-reading"><p class="eyebrow">${escapeHtml(item.topic)}<span class="tap-guide quick-tap-guide"><span></span> 未知語をタップ</span></p><div class="passage-scroll"><div class="passage-text quick-copy">${quickPassageHtml(item.passage)}</div></div><div class="sticky-action"><button class="primary-button dark" data-finish>問題へ <span>→</span></button></div></article>`;
   const timer = app.querySelector('#timer');
   const tick = setInterval(() => { const left = Math.max(0, session.limit - (nowSeconds() - session.startedAt)); timer.textContent = fmtTime(left); if (left <= 0) finishQuickReading(); }, 250);
+  const vocab=session.quickVocab[session.passageIndex];
+  app.querySelectorAll('.word-token').forEach((button)=>button.onclick=()=>toggleUnknown(button,vocab));
   session.timer = tick; app.querySelector('[data-finish]').onclick = finishQuickReading; app.querySelector('[data-home]').onclick = () => { clearInterval(tick); renderHome(); };
 }
 
@@ -131,6 +134,37 @@ function renderQuickResult() {
   store.quickHistory.unshift(record); store.quickRating=ratingUpdate.newRating; saveState(store);
   void putSession('quick', record);
   renderResult('QUICK COMPLETE', `${correct}<small>/9</small>`, '正確さを保ちながら、テンポを育てる。', [['Quick Rating',`${record.displayRatingBefore} → ${record.displayRatingAfter}`],['Rating変化',`${ratingUpdate.delta>0?'+':''}${ratingUpdate.delta}`],['Accuracy',`${Math.round(correct/9*100)}%`]],reviewHtml(session.passages,session.answers));
+  mountQuickVocabulary(record,session.quickVocab||[]);
+}
+
+function vocabCardHtml(entries,loading=false) {
+  const rows=loading?'<li class="empty-row">単語の意味を取得中…</li>':entries.length?entries.map(({word,generalMeaning,exampleSentence})=>`<li><b>${escapeHtml(word)}</b><span><em>基本義：</em>${escapeHtml(generalMeaning)}<strong class="vocab-example">${escapeHtml(exampleSentence||'例文を取得できませんでした。')}</strong></span></li>`).join(''):'<li class="empty-row">今回は記録した単語はありません。</li>';
+  const disabled=loading||!entries.length?'disabled':'';
+  return `<section class="vocab-card"><div><p class="eyebrow">UNKNOWN WORDS</p><h2>今回の未知語</h2></div><ul>${rows}</ul><div class="vocab-actions"><button class="primary-button" data-copy-3 ${disabled}>3列でコピー <span>⧉</span></button><button class="primary-button" data-copy-2 ${disabled}>従来2列でコピー <span>⧉</span></button></div></section>`;
+}
+function mountVocabCopy(record) {
+  const copyRows=(selector,formatter)=>{const button=app.querySelector(selector);if(button&&!button.disabled)button.onclick=async()=>{await navigator.clipboard.writeText(record.unknownWords.map(formatter).join('\n'));button.textContent='コピーしました ✓';};};
+  copyRows('[data-copy-3]',(v)=>`${v.word}\t${v.generalMeaning}\t${v.exampleSentence||''}`); copyRows('[data-copy-2]',(v)=>`${v.word}\t${v.generalMeaning}`);
+}
+// Quick は3本の本文それぞれで未知語を選ぶ。本文ごとに表現の判定と意味の取得を行い、重複を除いてまとめる。
+async function mountQuickVocabulary(record,targets) {
+  const selected=targets.filter(t=>t.selectedTokenIndices.size);
+  const place=(html)=>{const old=app.querySelector('.vocab-card');if(old)old.outerHTML=html;else app.querySelector('.result-actions')?.insertAdjacentHTML('beforebegin',html);};
+  if(!selected.length){place(vocabCardHtml([]));return;}
+  place(vocabCardHtml([],true));
+  const merged=new Map();
+  for(const target of selected){
+    let entries;
+    try{entries=await resolveUnknownWords(target);}
+    catch{target.expressionsResolved=true;try{entries=await resolveUnknownWords(target);}catch{entries=[...target.unknownWords.keys()].map(word=>normalizeUnknownWord({word,generalMeaning:'意味を取得できませんでした'}));}}
+    for(const entry of entries)if(!merged.has(entry.word))merged.set(entry.word,entry);
+  }
+  record.unknownWords=normalizeUnknownWords([...merged.values()]);
+  try{saveState(store);}catch{}
+  void putSession('quick',record);
+  if(!app.querySelector('.vocab-card'))return;
+  place(vocabCardHtml(record.unknownWords));mountVocabCopy(record);
+  mountConciseVocabulary(record,'quick',record.unknownWords);
 }
 
 async function startLong() {
@@ -169,6 +203,7 @@ function renderLongReading() {
   app.querySelectorAll('.word-token').forEach((button)=>button.onclick=()=>toggleUnknown(button)); app.querySelector('[data-finish]').onclick=finishLongReading; app.querySelector('[data-home]').onclick=()=>{clearInterval(session.timer);renderHome();};
 }
 
+function quickPassageHtml(passage) { let tokenIndex=0; return passage.split(/\n\s*\n/).map((p)=>`<p>${tokenizeParagraph(p,()=>tokenIndex++)}</p>`).join('\n'); }
 function tokenizeParagraph(text,nextIndex) {
   let cursor=0;const pieces=[];
   for(const token of passageWordTokens(text)){
@@ -176,12 +211,12 @@ function tokenizeParagraph(text,nextIndex) {
   }
   pieces.push(escapeHtml(text.slice(cursor)));return pieces.join('');
 }
-function toggleUnknown(button) {
-  const index=Number(button.dataset.tokenIndex),selected=session.selectedTokenIndices;
+function toggleUnknown(button,target=session) {
+  const index=Number(button.dataset.tokenIndex),selected=target.selectedTokenIndices;
   selected.has(index)?selected.delete(index):selected.add(index);
-  const previous=session.unknownWords;
-  session.unknownWords=new Map(vocabularyFromSelection(session.content.passage,[...selected]).map(word=>{
-    const known=previous.get(word)||session.content.vocabulary?.[word];
+  const previous=target.unknownWords;
+  target.unknownWords=new Map(vocabularyFromSelection(target.content.passage,[...selected]).map(word=>{
+    const known=previous.get(word)||target.content.vocabulary?.[word];
     const rawMeaning=typeof known==='string'?known:known?.generalMeaning||known?.basicMeaning||known?.contextMeaning;
     return [word,normalizeUnknownWord({...(typeof known==='string'?{generalMeaning:known}:known),word,pending:!known||!isJapaneseMeaning(rawMeaning)})];
   }));
@@ -305,7 +340,7 @@ function mountConciseVocabulary(record,mode,entries){
 
 let reviewTranslationIds=new Map();
 function reviewHtml(passages,answers=[]) {
-  reviewTranslationIds=new Map(passages.map((passage,index)=>[`passage-${index}`,passage.bankId||passage.id]).filter(([,id])=>/^L[0-9]-\d{3}$/.test(id)));
+  reviewTranslationIds=new Map(passages.map((passage,index)=>[`passage-${index}`,passage.bankId||passage.id]).filter(([,id])=>isBankTranslationId(id)));
   let answerOffset=0;
   return `<div class="review-content">${passages.map((passage,passageIndex)=>{const key=`passage-${passageIndex}`;const questions=passage.questions.map((question,index)=>{const response=answers[answerOffset+index];const selected=response?.selected;const correct=selected===question.answer;const ownAnswer=selected===null||selected===undefined?'未回答':`${String.fromCharCode(65+selected)}. ${escapeHtml(question.choices[selected])}`;return `<article class="answer-review ${correct?'correct':'incorrect'}"><div class="answer-review-head"><h3>Question ${index+1}</h3><strong>${correct?'正解':'不正解'}</strong></div><p>${escapeHtml(question.prompt)}</p><dl><div><dt>自分の回答</dt><dd>${ownAnswer}</dd></div><div><dt>正解</dt><dd>${String.fromCharCode(65+question.answer)}. ${escapeHtml(question.choices[question.answer])}</dd></div></dl>${question.promptJa?`<details><summary>和訳を見る</summary><p>${escapeHtml(question.promptJa)}</p><ol class="choice-ja" type="A">${question.choicesJa.map(text=>`<li>${escapeHtml(text)}</li>`).join('')}</ol></details>`:`<details><summary>解説を見る</summary><p>${escapeHtml(question.explanation)}</p><p><b>根拠：</b>${escapeHtml(question.evidence)}</p></details>`}</article>`;}).join('');answerOffset+=passage.questions.length;return `<details><summary>${escapeHtml(passage.title||passage.topic)}：回答と本文</summary>${questions}<section class="passage-review"><div class="review-toggle" role="group" aria-label="本文表示"><button type="button" class="active" data-review-view="original" data-review-key="${key}">原文</button><button type="button" data-review-view="translation" data-review-key="${key}">和訳</button></div><div data-review-panel="original" data-review-key="${key}"><h3>Original</h3>${translationHtml(passage.passage)}</div><div data-review-panel="translation" data-review-key="${key}" hidden><h3>日本語訳</h3>${translationHtml(passage.translation)}</div></section></details>`;}).join('')}</div>`;
 }
